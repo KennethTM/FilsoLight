@@ -1,0 +1,258 @@
+---
+title: "SMB II synopsis"
+author: "Kenneth Thorø Martinsen"
+date: "Feb. 1 2021"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr);library(flextable);library(papeR)
+
+#kable(prettify(summary(m)))
+
+source("rawdata.R")
+
+filso_kz_filt <- filso_kz %>% 
+  select(-kz_ody) %>% 
+  filter(kz_hobo > 0) %>% 
+    mutate(year = year(date),
+           doy = yday(date),
+           month = month(date),
+           site = factor(logger_site),
+           wnd_dir_bin = cut(wnd_dir, seq(0, 360, 90)))
+```
+
+# Light climate in Filsø, Denmark
+
+## Part 1
+
+1.  Kenneth Thorø Martinsen, research assistant at Freshwater Biology, Science, KU, supervisor Kaj Sand-Jensen.
+
+2.  The aim of the analysis is to investigate how wind speed and direction affects the light climate in Filsø. Filsø is a large (9.15 km^2^) shallow lake near Varde in western Jutland that was reestablished in 2012. In the following years, an unprecedented high species richness (\~60 species) of aquatic plants have been observed. The areal cover of aquatic plants is highly dependent on light. The light attenuation (k~z~) is the reduction of incident light with depth caused by light absorption and scattering. This is affected by chlorophyll a (i.e the light absorbing pigment in microalgae), colored dissolved organic matter, suspended particles and water it self. Since re-establishment of the lake, it has been monitored intensively using high-frequency sensor measurements supplemented by frequent collection of water samples at multiple sites. Using this time-series data, I want to investigate:
+
+    -   How has k~z~ changed over time since reestablishment?
+    -   How does wind speed and direction influence k~z~ (both in time and differences between sites)?
+    -   What is the time response of k~z~ following reduced wind speed/changed wind direction
+    -   How are the relationships between k~z~ and the main light attenuation variables: suspended particles, dissolved colored organic material and chlorophyll a
+
+3.  Overview of dataset:
+
+    Main variables:
+
+    -   k~z~ measured daily at four sites within the lake with increasing distance from the inlet stream
+    -   Wind speed and direction measured at one weather site at the lake
+
+    Supplementary data:
+
+    -   Chlorophyll a measured daily at one site within the lake
+    -   Colored dissolved organic matter and nutrients measured regularly (approx. every two weeks)
+    -   Suspended particles expressed as the remainder of k~z~ following substraction of water, chlorophyll a and colored dissolved organic matter
+
+    All variables likely contain temporal auto-correlation. Summary of data, where data measured at one site are repeated for the four sites containing k~z~ data and date variable split to year, month and day-of-year:
+
+```{r overview, echo = FALSE, warning=FALSE, message=FALSE, fig.height=8}
+filso_kz_filt %>% 
+  select(-site, -wnd_dir_bin, -contains("lag")) %>% 
+  gather(variable, value) %>% 
+  na.omit() %>% 
+  group_by(variable) %>% 
+  summarise(min = min(value), max = max(value), N = n()) %>% 
+  arrange(variable) %>% 
+  mutate(Range = paste0("[", round(min, 1), " ; ", round(max, 1), "]")) %>% 
+  add_column(Type = c("numeric", "", "numeric", "numeric", "nominal", "numeric", "numeric", "numeric", "numeric", "numeric"),
+             Useage = c("fixed", "", "fixed", "response", "random", "fixed", "fixed", "fixed", "fixed", "fixed"),
+             Variable = c("Chl. a", "Date", "Day-of-year", "kz", "Site", "Month", "Wind direction", "Max wind speed", "Mean wind speed", "Year")) %>% 
+  filter(variable != "chl", variable != "Date") %>% 
+  select(Variable, Type, Range, N, Useage) %>% 
+  flextable() %>% 
+  autofit()
+```
+
+*The date range corresponds to `r as_date(15874)` -- `r as_date(17460)`*
+
+4.  Some plots of data:
+
+**k~z~ plotted by year and colored by site:**
+
+```{r plot, echo = FALSE, warning=FALSE, message=FALSE, fig.width=8, fig.height=8}
+filso_kz_filt %>% 
+  ggplot(aes(doy, kz_hobo, col = site)) +
+  geom_point(alpha = 0.2)+
+  #geom_smooth(se = FALSE)+
+  geom_line()+
+  scale_color_viridis_d()+
+  coord_cartesian(ylim=c(0, 10))+
+  ylab("kz")+
+  xlab("Day of year")+
+  facet_grid(year~.)
+```
+
+**Plot of k~z~*versus* wind speed colored by wind direction:**
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=6}
+filso_kz_filt %>% 
+    filter(kz_hobo < 10, wnd_max < 12) %>% 
+  ggplot(aes(wnd_max, kz_hobo, col = wnd_dir_bin))+
+  geom_point(alpha=0.5)+
+  scale_color_viridis_d(name = "Wind direction")+
+  ylab("kz")+
+  xlab("Wind speed")+
+  facet_wrap(site~.)
+```
+
+Wind speed depends to some degree on wind direction. Field observations suggest that changes in wind direction can suddenly increase k~z~. This effect however, is not sustained for longer periods with wind from the same direction, as the quantity of particles that are susceptible to re-suspension decrease. Such patterns and temporal dependence are likely key processes determining the influence of wind speed on k~z~.
+
+5.  As I suspect some highly non-linear effects, my initial thought was to use generalized additive models to include random effects and temporal correlation structures. But, linear mixed modeling might be sufficient. I am not familiar with other time-series type analysis, but that could be relevant to look into.
+
+6.  I am using R.
+
+## Part 2
+
+### Data for modeling
+
+Part 2 of the analysis, following first meeting.
+
+Select data for initial modeling, dropping missing observations, create season variable but excluding winter, and log-transform k~z~.
+
+```{r, echo=FALSE}
+model_df <- filso_kz_filt %>% 
+  mutate(kz_hobo = log(kz_hobo),
+         season = case_when(month %in% c(3, 4, 5) ~ "spring",
+                            month %in% c(6, 7, 8) ~ "summer",
+                            month %in% c(9, 10, 11) ~ "autumn",
+                            month %in% c(12, 1, 2) ~ "winter"),
+         season = factor(season)) %>% 
+  filter(season != "winter") %>% 
+  select(kz_hobo, wnd_max, contains("max_lag"), wnd_dir_bin, site, year, season, doy, date, month) %>% 
+  arrange(date, site) %>% 
+  na.omit()
+```
+
+Histogram of input variables (lagged variables excluded):
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+model_df %>% 
+  select(-wnd_dir_bin, -site, -date, -season, -contains("lag")) %>% 
+  gather(variable, value) %>% 
+  na.omit() %>% 
+  ggplot(aes(value)) +
+  geom_histogram()+
+  facet_wrap(variable~., scales = "free")
+```
+
+### Model with site as random effect
+
+Fit an initial model with site as random variables, interaction between wind speed and direction (4 levels) and year and season as fixed effects:
+
+```{r, warning=FALSE, message=FALSE}
+library(nlme)
+
+m <- lme(kz_hobo ~ wnd_max * wnd_dir_bin + wnd_max_lag1 * wnd_dir_bin + 
+            year + season, data = model_df, random = ~1|site)
+
+summary(m)
+```
+
+Plots of residual autocorrelation:
+
+```{r}
+#Autocorrelation plots
+par(mfrow=c(1, 2))
+acf(residuals(m, retype="normalized"), main="")
+pacf(residuals(m, retype="normalized"), main="")
+```
+
+Strong autocorrelation signal in residuals.
+
+### Model with site as random effect and corGaus correlation structure
+
+Fitting same model with corGaus correlation structures (1000 obs random subset for faster fitting):
+
+```{r, warning=FALSE, message=FALSE}
+m_gaus <- lme(kz_hobo ~ wnd_max * wnd_dir_bin + 
+                wnd_max_lag1 * wnd_dir_bin + 
+            year + season, 
+            data = model_df[sample(1:nrow(model_df), 1000),], 
+            random = ~1|site,
+            correlation = corGaus(form = ~ as.numeric(date)|site, nugget = FALSE)) 
+
+summary(m_gaus)
+```
+
+Plots of residual autocorrelation:
+
+```{r}
+#Autocorrelation plots
+par(mfrow=c(1, 2))
+acf(residuals(m_gaus, retype="normalized"), main="")
+pacf(residuals(m_gaus, retype="normalized"), main="")
+```
+
+Looks good, or at least much improved than without specifying the correlation structure.
+
+Plot variogram:
+
+```{r}
+plot(Variogram(m_gaus, form = ~ as.numeric(date)|site, data = model_df))
+```
+
+How to interpret this plot? Looks weird, or at least not as expected.
+
+Residual plot:
+
+```{r}
+plot(m_gaus)
+```
+
+### Model with site as random effect and corAR1 correlation structure
+
+Fitting same model corAR1 correlation structures (1000 obs random subset for faster fitting):
+
+```{r, message=FALSE, warning=FALSE}
+m_ar1 <- lme(kz_hobo ~ wnd_max * wnd_dir_bin + 
+                wnd_max_lag1 * wnd_dir_bin + 
+            year + season, 
+            data = model_df[sample(1:nrow(model_df), 1000),], 
+            random = ~1|site,
+            correlation = corAR1(form = ~ as.numeric(date)|site)) 
+
+summary(m_ar1)
+```
+
+Plots of residual autocorrelation:
+
+```{r}
+#Autocorrelation plots
+par(mfrow=c(1, 2))
+acf(residuals(m_ar1, retype="normalized"), main="")
+pacf(residuals(m_ar1, retype="normalized"), main="")
+```
+
+Also looks good, or at least much improved than without specifying the correlation structure.
+
+Plot variogram:
+
+```{r}
+plot(Variogram(m_ar1, form = ~ as.numeric(date)|site, data = model_df))
+```
+
+Appear to be a better fit, at least with some subsets of the data.
+
+Residual plot:
+
+```{r}
+plot(m_ar1)
+```
+
+## Notes
+
+-   What initial model to start from?
+-   What does the corGaus structure do? What about other structures, e.g. corAR1 or corARMA?
+-   Model reduction using anova/lr test?
+-   Test for non-linear wind effects, i.e. including squared terms?

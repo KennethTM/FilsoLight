@@ -13,8 +13,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(knitr);library(flextable);library(papeR)
-
-#kable(prettify(summary(m)))
+library(nlme)
 
 source("rawdata.R")
 
@@ -25,7 +24,12 @@ filso_kz_filt <- filso_kz %>%
            doy = yday(date),
            month = month(date),
            site = factor(logger_site),
-           wnd_dir_bin = cut(wnd_dir, seq(0, 360, 90)))
+           wnd_dir_bin = case_when(between(wnd_dir, 45, 45+90*1) ~ "E",
+                                   between(wnd_dir, 45+90*1, 45+90*2) ~ "S",
+                                   between(wnd_dir, 45+90*2, 45+90*3) ~ "W",
+                                   TRUE ~ "N"),
+           wnd_dir_bin = factor(wnd_dir_bin))
+
 ```
 
 # Light climate in Filsø, Denmark
@@ -151,7 +155,6 @@ model_df %>%
 Fit an initial model with site as random variables, interaction between wind speed and direction (4 levels) and year and season as fixed effects:
 
 ```{r, warning=FALSE, message=FALSE}
-library(nlme)
 
 m <- lme(kz_hobo ~ wnd_max * wnd_dir_bin + wnd_max_lag1 * wnd_dir_bin + 
             year + season, data = model_df, random = ~1|site)
@@ -250,9 +253,64 @@ Residual plot:
 plot(m_ar1)
 ```
 
-## Notes
+## Part 3
 
--   What initial model to start from?
--   What does the corGaus structure do? What about other structures, e.g. corAR1 or corARMA?
--   Model reduction using anova/lr test?
--   Test for non-linear wind effects, i.e. including squared terms?
+### Model and model reduction with site as random and corGaus correlation structure
+
+Fit initial model:
+
+Three-way interaction with maximum wind speed, wind direction binned (N, S, E, W) and season (spring, summer and autumn) and a fixed effect of year. 
+
+```{r, warning=FALSE, message=FALSE}
+
+form <- formula(kz_hobo ~ wnd_max*wnd_dir_bin*season+year)
+
+#No residual correlation term
+#m <- lme(form, data = model_df, random = ~1|site, method = "ML")
+
+#Corgaus term
+m0 <- lme(form, data = model_df, random = ~1|site, method = "ML",
+          correlation = corGaus(form = ~ as.numeric(date)|site, nugget = FALSE))
+
+```
+
+Reduce model using drop1:
+
+```{r}
+drop1(m0, test = "Chisq")
+```
+
+Update model and drop again:
+
+```{r}
+m1 <- update(m0, ~ . -year)
+drop1(m1, test = "Chisq")
+```
+
+Model variogram:
+
+```{r}
+plot(Variogram(m1, form = ~ as.numeric(date)|site, data = model_df, nugget = FALSE))
+```
+
+Model diagnostics:
+
+```{r}
+plot(m1)
+```
+
+Autocorrelation plots:
+
+```{r}
+plot(ACF(m1, retype="normalized"))
+```
+
+Raw output from summary:
+
+```{r}
+summary(m1)
+```
+
+```{r, echo=FALSE}
+saveRDS(m1, "m1.rds")
+```

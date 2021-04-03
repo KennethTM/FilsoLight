@@ -1,0 +1,187 @@
+---
+title: "SMB II - GAM analysis"
+author: "Kenneth Thorø Martinsen"
+date: "Apr. 3 2021"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+source("rawdata.R")
+
+library(mgcv)
+library(mgcViz)
+
+filso_kz_filt <- filso_kz %>% 
+  select(-kz_ody) %>% 
+  filter(kz_hobo > 0) %>% 
+  mutate(kz_hobo = log(kz_hobo),
+         year = year(date),
+         doy = yday(date),
+         month = month(date),
+         site = factor(logger_site))
+
+#Model data
+model_df <- filso_kz_filt %>% 
+  select(kz_hobo, wnd_max, contains("max_lag"), site, year, doy, date, month, wnd_dir) %>% 
+  filter(month %in% c(3:11)) %>% 
+  arrange(site, date) %>% 
+  na.omit()
+
+gam_list <- readRDS("gam_list.rds")
+gam_nocorr <- gam_list$nocorr
+gam_car <- gam_list$gam_car
+gam_gaus <- gam_list$gam_gaus
+gam_car_5 <- readRDS("gam_final.rds")
+```
+
+### Analyzing k~z~ using GAM
+
+Summary of model data:
+
+```{r}
+summary(model_df)
+```
+
+Fit initial models and compare correlation structures
+
+```{r, eval=FALSE}
+form <- formula(kz_hobo ~ 
+                  s(site, bs="re")+
+                  s(wnd_max)+
+                  s(wnd_max_lag1)+
+                  s(wnd_max_lag2)+
+                  s(wnd_max_lag3)+
+                  s(wnd_dir, bs = "cc")+
+                  s(doy, bs = "cc", by = ordered(year))+
+                  year)
+
+#Fit models using different correlations structures
+gam_nocorr <- gamm(form, 
+                   data = model_df, 
+                   method = "REML")
+
+gam_car <- gamm(form,
+                correlation = corCAR1(form = ~ as.numeric(date)|site), 
+                data = model_df, 
+                method = "REML")
+
+gam_gaus <- gamm(form, 
+                 correlation = corGaus(form = ~ as.numeric(date)|site), 
+                 data = model_df, 
+                 method = "REML")
+```
+
+Compare the fitted models:
+
+```{r}
+anova(gam_nocorr$lme, gam_car$lme, gam_gaus$lme)
+```
+
+Summary of best model:
+
+```{r}
+summary(gam_car$gam)
+```
+
+Stepwise re-fitting of models without non-significant smooths and model terms:
+
+```{r, eval=FALSE}
+#Drop smooths for lagged wind speed
+gam_car_2 <- gamm(kz_hobo ~ 
+                  s(site, bs="re")+
+                  s(wnd_max)+
+                  s(wnd_max_lag1)+
+                  wnd_max_lag2+
+                  wnd_max_lag3+
+                  s(wnd_dir, bs = "cc")+
+                  s(doy, bs = "cc", by = ordered(year))+
+                  year,
+                correlation = corCAR1(form = ~ as.numeric(date)|site), 
+                data = model_df, 
+                method = "REML")
+
+#Drop lag 3 wind speed
+gam_car_3 <- gamm(kz_hobo ~ 
+                    s(site, bs="re")+
+                    s(wnd_max)+
+                    s(wnd_max_lag1)+
+                    wnd_max_lag2+
+                    s(wnd_dir, bs = "cc")+
+                    s(doy, bs = "cc", by = ordered(year))+
+                    year,
+                  correlation = corCAR1(form = ~ as.numeric(date)|site), 
+                  data = model_df, 
+                  method = "REML")
+
+#Drop year
+gam_car_4 <- gamm(kz_hobo ~ 
+                    s(site, bs="re")+
+                    s(wnd_max)+
+                    s(wnd_max_lag1)+
+                    wnd_max_lag2+
+                    s(wnd_dir, bs = "cc")+
+                    s(doy, bs = "cc", by = ordered(year)),
+                  correlation = corCAR1(form = ~ as.numeric(date)|site), 
+                  data = model_df, 
+                  method = "REML")
+
+#Drop lag 2 wind speed
+gam_car_5 <- gamm(kz_hobo ~ 
+                    s(site, bs="re")+
+                    s(wnd_max)+
+                    s(wnd_max_lag1)+
+                    s(wnd_dir, bs = "cc")+
+                    s(doy, bs = "cc", by = ordered(year)),
+                  correlation = corCAR1(form = ~ as.numeric(date)|site), 
+                  data = model_df, 
+                  method = "REML")
+```
+
+### Inspecting the final model
+
+Model summary:
+
+```{r}
+summary(gam_car_5$gam)
+```
+
+ACF plot:
+
+```{r}
+acf(resid(gam_car_5$lme, type = "normalized"))
+```
+
+PACF plot:
+
+```{r}
+pacf(resid(gam_car_5$lme, type = "normalized"))
+```
+
+Variogram plot:
+
+```{r}
+plot(Variogram(gam_car_5$lme, form = ~ as.numeric(date)|site, data = model_df))
+```
+
+Plot of model smooths:
+
+```{r, fig.width=10, fig.height=10}
+viz <- getViz(gam_car_5$gam)
+print(plot(viz), pages = 1)
+```
+
+Plot of predicted vs. observed values:
+
+```{r, echo=FALSE, warning=FALSE}
+model_df %>% 
+  mutate(prediction = predict(gam_car_5$gam)) %>% 
+  ggplot(aes(kz_hobo, prediction))+
+  geom_point(alpha=0.2)+
+  geom_abline(intercept = 0, slope=1, linetype = 2)+
+  ylim(-1, 2.5)+
+  xlim(-1, 2.5)+
+  ylab("Predicted log(kz)")+
+  xlab("Observed log(kz)")
+```
+

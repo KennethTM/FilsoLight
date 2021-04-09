@@ -1,131 +1,124 @@
 source("rawdata.R")
 
-library(mgcv)
-
-filso_kz_filt <- filso_kz %>% 
-  select(-kz_ody) %>% 
-  filter(kz_hobo > 0) %>% 
-  mutate(kz_hobo = log(kz_hobo),
-         year = year(date),
-         doy = yday(date),
-         month = month(date),
-         site = factor(logger_site))
-
-#Model data
-model_df <- filso_kz_filt %>% 
-  select(kz_hobo, wnd_max, contains("max_lag"), site, year, doy, date, month, wnd_dir) %>% 
-  filter(month %in% c(3:11)) %>% 
-  arrange(site, date) %>% 
-  na.omit()
-
+#summary of model data
 summary(model_df)
 
-#Fit initial models and compare correlation structures
-form <- formula(kz_hobo ~ 
-                  s(site, bs="re")+
-                  s(wnd_max)+
-                  s(wnd_max_lag1)+
-                  s(wnd_max_lag2)+
-                  s(wnd_max_lag3)+
-                  s(wnd_dir, bs = "cc")+
-                  s(doy, bs = "cc", by = ordered(year))+
-                  year)
+#initial gam - check smoothing of predictor terms
+gam_1 <- gam(kz_hobo ~
+               s(site, bs = "re")+
+               s(wnd_mean)+
+               s(wnd_mean_lag1)+
+               s(wnd_mean_lag2)+
+               s(wnd_mean_lag3)+
+               s(wnd_dir, bs = "cc")+
+               ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
+               s(doy, by=year_fact)+
+               year,
+             data = model_df)
+summary(gam_1)
+plot(gam_1, pages=1, residuals=TRUE)
+
+#make non signicant smooth terms parametric terms instead
+gam_2 <- gam(kz_hobo ~
+               s(site, bs = "re")+
+               s(wnd_mean)+
+               wnd_mean_lag1+
+               wnd_mean_lag2+
+               wnd_mean_lag3+
+               s(wnd_dir, bs = "cc", k=15)+
+               ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
+               s(doy, by=year_fact, k=15)+
+               year,
+             data = model_df)
+summary(gam_2)
+plot(gam_2, pages=1, residuals=TRUE)
+
+#check k values by plotting residuals vs each smoothed predictor and change gam_2 model
+rsd <- residuals(gam_2)
+gam(rsd~s(wnd_mean, bs = "cs"), gamma=1.4, data=model_df)
+gam(rsd~s(wnd_dir, bs = "cs", k = 15), gamma=1.4, data=model_df) 
+gam(rsd~ti(wnd_mean, wnd_dir, bs="cs"), gamma=1.4, data=model_df) 
+gam(rsd~s(doy, by=year_fact, k=15, bs="cs"), gamma=1.4, data=model_df) #increase k
+gam.check(gam_2)
 
 #Fit models using different correlations structures
+form <- formula(kz_hobo ~
+                  s(site, bs = "re")+
+                  s(wnd_mean)+
+                  wnd_mean_lag1+
+                  wnd_mean_lag2+
+                  wnd_mean_lag3+
+                  s(wnd_dir, bs = "cc", k=15)+
+                  ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
+                  s(doy, by=year_fact, k=15)+
+                  year)
+
 gam_nocorr <- gamm(form, 
-                   data = model_df, 
-                   method = "REML")
+                   data = model_df)
 
 gam_car <- gamm(form,
                 correlation = corCAR1(form = ~ as.numeric(date)|site), 
-                data = model_df, 
-                method = "REML")
+                data = model_df)
 
 gam_gaus <- gamm(form, 
                  correlation = corGaus(form = ~ as.numeric(date)|site), 
-                 data = model_df, 
-                 method = "REML")
-
-saveRDS(list("nocorr"=gam_nocorr, "gam_car"=gam_car, "gam_gaus"=gam_gaus), "gam_list.rds")
+                 data = model_df)
 
 #Compare models
 anova(gam_nocorr$lme, gam_car$lme, gam_gaus$lme)
 
-#Inspect best model
+#Save models
+saveRDS(list("nocorr"=gam_nocorr, "gam_car"=gam_car, "gam_gaus"=gam_gaus), 
+        paste0(modeling_path, "gam_list.rds"))
+
+#Inspect model
 summary(gam_car$gam)
 acf(resid(gam_car$lme, type = "normalized"))
 pacf(resid(gam_car$lme, type = "normalized"))
-plot(Variogram(gam_car$lme, form = ~ as.numeric(date)|site, data = model_df))
-gam.check(gam_car$gam)
+plot(Variogram(gam_car$lme, data = model_df))
 
-#Refit model without non-significant smooths
-gam_car_2 <- gamm(kz_hobo ~ 
-                  s(site, bs="re")+
-                  s(wnd_max)+
-                  s(wnd_max_lag1)+
-                  wnd_max_lag2+
-                  wnd_max_lag3+
-                  s(wnd_dir, bs = "cc")+
-                  s(doy, bs = "cc", by = ordered(year))+
-                  year,
-                correlation = corCAR1(form = ~ as.numeric(date)|site), 
-                data = model_df, 
-                method = "REML")
+#Compare candidate models by AIC
+gam_car_wrap <- uGamm(form,
+                      correlation = corCAR1(form = ~ as.numeric(date)|site),
+                      data = model_df)
 
-#Stepwise drop non-significant terms
-gam_car_3 <- gamm(kz_hobo ~ 
-                    s(site, bs="re")+
-                    s(wnd_max)+
-                    s(wnd_max_lag1)+
-                    wnd_max_lag2+
-                    s(wnd_dir, bs = "cc")+
-                    s(doy, bs = "cc", by = ordered(year))+
-                    year,
-                  correlation = corCAR1(form = ~ as.numeric(date)|site), 
-                  data = model_df, 
-                  method = "REML")
+cl <- makeCluster(4, type = "SOCK")
+clusterExport(cl, "model_df")
 
-gam_car_4 <- gamm(kz_hobo ~ 
-                    s(site, bs="re")+
-                    s(wnd_max)+
-                    s(wnd_max_lag1)+
-                    wnd_max_lag2+
-                    s(wnd_dir, bs = "cc")+
-                    s(doy, bs = "cc", by = ordered(year)),
-                  correlation = corCAR1(form = ~ as.numeric(date)|site), 
-                  data = model_df, 
-                  method = "REML")
+mod_sel <- pdredge(gam_car_wrap,
+                   cluster = cl,
+                   rank = "AIC",
+                   fixed = c('s(site, bs = "re")',
+                             's(wnd_mean)',
+                             's(wnd_dir, bs = "cc", k = 15)',
+                             's(doy, by = year_fact, k = 15)'))
 
-gam_car_5 <- gamm(kz_hobo ~ 
-                    s(site, bs="re")+
-                    s(wnd_max)+
-                    s(wnd_max_lag1)+
-                    s(wnd_dir, bs = "cc")+
-                    s(doy, bs = "cc", by = ordered(year)),
-                  correlation = corCAR1(form = ~ as.numeric(date)|site), 
-                  data = model_df, 
-                  method = "REML")
+saveRDS(mod_sel, paste0(modeling_path, "gam_model_selection.rds"))
 
-#Inspect and save final model
-saveRDS(gam_car_5, "gam_final.rds")
+stopCluster(cl)
 
-summary(gam_car_5$gam)
-acf(resid(gam_car_5$lme, type = "normalized"))
-pacf(resid(gam_car_5$lme, type = "normalized"))
-plot(Variogram(gam_car_6$lme, form = ~ as.numeric(date)|site, data = model_df))
-gam.check(gam_car_6$gam)
 
-model_df %>% 
-  mutate(prediction = predict(gam_car_5$gam)) %>% 
-  ggplot(aes(kz_hobo, prediction))+
-  geom_point(alpha=0.2)+
-  geom_abline(intercept = 0, slope=1, linetype = 2)+
-  ylim(-1, 2.5)+
-  xlim(-1, 2.5)+
-  ylab("Predicted log(kz)")+
-  xlab("Observed log(kz)")
+###
 
-library(mgcViz)
-viz <- getViz(gam_car_5$gam)
-print(plot(viz), pages = 1)
 
+#Fit best model, inspect and save
+form_best <- formula(kz_hobo ~ 
+                       s(site, bs="re")+
+                       s(wnd_mean)+
+                       wnd_mean_lag1+
+                       s(wnd_dir, bs = "cc")+
+                       s(doy, bs = "cc", by = year_fact, k=20))
+
+gam_best <- gamm(form_best, 
+                 correlation = corCAR1(form = ~ as.numeric(date)|site),
+                 data = model_df)
+
+summary(gam_best$gam)
+acf(resid(gam_best$lme, type = "normalized"))
+pacf(resid(gam_best$lme, type = "normalized"))
+plot(Variogram(gam_best$lme, form = ~ as.numeric(date)|site, data = model_df))
+gam.check(gam_best$gam)
+par(mfrow=c(2,2))  
+gam.check(gam_best$gam)  
+
+saveRDS(gam_best, paste0(modeling_path, "gam_best.rds"))

@@ -1,8 +1,14 @@
-#libraries and functions
+#Libraries and functions
 
-library(tidyverse);library(lubridate);library(readxl)
+library(tidyverse);library(lubridate);library(readxl);library(httr);library(jsonlite);library(mgcv)
+library(patchwork);library(mgcViz);library(MuMIn);library(snow)
+library(sf);library(rnaturalearth)
+
+#Figure sizing. For most journals the figures should be 39 mm, 84 mm, 129 mm, or 174 mm wide and not higher than 234 mm.
 
 rawdata_path <- paste0(getwd(), "/data/raw/")
+figures_path <- paste0(getwd(), "/figures/")
+modeling_path <- paste0(getwd(), "/modeling/")
 
 #ggplot theme used for figures
 theme_pub <- theme_bw() + 

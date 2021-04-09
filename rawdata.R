@@ -78,3 +78,28 @@ kz <- read_csv(paste0(rawdata_path, "data_JSS/kz_filso_JSS.csv")) %>%
 filso_kz <- kz %>% 
   left_join(wnd) %>% 
   left_join(chl)
+
+wnd_dmi <- readRDS(paste0(rawdata_path, "dmi_wind_data.rds")) %>% 
+  select(date, wnd_mean, wnd_dir = dir_mean) %>% 
+  mutate(wnd_mean_lag1 = lag(wnd_mean, 1), 
+         wnd_mean_lag2 = lag(wnd_mean, 2),
+         wnd_mean_lag3 = lag(wnd_mean, 3))
+
+kz_dmi_wnd <- kz %>% 
+  select(date, logger_site, kz_hobo) %>% 
+  left_join(wnd_dmi) %>%
+  na.omit() %>%  
+  filter(kz_hobo > 0)
+
+#prepare model data
+model_df <- kz_dmi_wnd %>% 
+  mutate(year = year(date),
+         year_fact = factor(year),
+         kz_hobo = log(kz_hobo),
+         doy = yday(date),
+         month = month(date),
+         site = factor(logger_site)) %>%
+  filter(between(doy, 80, 295)) %>% 
+  select(site, date, year, year_fact, doy, kz_hobo, contains("wnd_")) %>% 
+  arrange(site, date) %>% 
+  na.omit()

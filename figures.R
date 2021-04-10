@@ -2,7 +2,8 @@ source("rawdata.R")
 
 #Figure 1
 boundary <- st_read(paste0(getwd(), "/data/boundary.sqlite")) %>% 
-  st_transform(25832)
+  st_transform(25832) %>% 
+  st_zm()
 
 boundary_centroid <- boundary %>% 
   st_centroid()
@@ -10,6 +11,21 @@ boundary_centroid <- boundary %>%
 st <- st_read(paste0(getwd(), "/data/st_filso.kmz")) %>% 
   st_transform(25832) %>% 
   filter(Name != "Weather")
+
+#Station fetch stats
+# library(windfetchR);library(raster)
+# rast_tmp <- raster(boundary, res = 5)
+# rast <- rasterize(as(boundary, "Spatial"), rast_tmp, field = 1)
+# rast_islake <- (rast ==  1)
+# rast_fetch_many <- fetch(rast_islake, angle = seq(0, 360-22.5,22.5 ))
+# fetch_mean <- calc(rast_fetch_many, fun=mean)
+# stat_fetch <- st %>% 
+#   mutate(fetch=extract(fetch_mean, as(st, "Spatial")))
+# 
+# gam_best$gam %>% coef() -> gam_re
+# gam_re[grep("site", names(gam_re))]
+# 
+# plot(c(852.1875, 1056.2500, 923.1250, 851.2500), c(0.213230858,  0.003486896, -0.136628694, -0.080089061 ))
 
 eu_poly <- st_read(paste0(getwd(), "/data/eu_poly.kmz")) %>% 
   st_transform(25832)
@@ -139,21 +155,94 @@ all_vars_fig <- cdom_fig+chl_fig+wnd_speed_fig+wnd_dir_fig+plot_layout(ncol=1, g
 
 ggsave(paste0(figures_path, "all_vars_fig.png"), all_vars_fig, width = 129, height = 234, units = "mm")
 
-
-####
-
 #Figure 5
+gam_best <- readRDS(paste0(modeling_path, "gam_best.rds"))
 
-model_df %>% 
-  mutate(prediction = predict(gam_car_5$gam)) %>% 
+viz <- getViz(gam_best$gam)
+
+fig_ylims <- c(-0.1, 0.6)
+
+gam_wnd_fig <- plot(sm(viz, 2))+
+  l_ciPoly()+
+  l_fitLine()+
+  l_rug()+
+  coord_cartesian(ylim = fig_ylims)+
+  xlab(expression("Wind speed, t"[0]~"(m s"^{-1}*")"))+
+  ylab(expression("k"[z]*" (m"^{-1}*")"))+
+  theme_pub
+
+gam_wnd_lag1_fig <- plot(pterm(viz, 1))+
+  l_ciPoly()+
+  l_fitLine()+
+  l_rug()+
+  coord_cartesian(ylim = fig_ylims)+
+  xlab(expression("Wind speed, t"[-1]~"(m s"^{-1}*")"))+
+  ylab(expression("k"[z]*" (m"^{-1}*")"))+
+  theme_pub
+
+gam_wnd_lag2_fig <- plot(pterm(viz, 2))+
+  l_ciPoly()+
+  l_fitLine()+
+  l_rug()+
+  coord_cartesian(ylim = fig_ylims)+
+  xlab(expression("Wind speed, t"[-2]~"(m s"^{-1}*")"))+
+  ylab(expression("k"[z]*" (m"^{-1}*")"))+
+  theme_pub
+
+gam_dir_fig <- plot(sm(viz, 3))+
+  l_ciPoly()+
+  l_fitLine()+
+  l_rug()+
+  coord_cartesian(ylim = fig_ylims)+
+  xlab("Wind direction (degrees)")+
+  ylab(expression("k"[z]*" (m"^{-1}*")"))+
+  theme_pub
+
+gam_inter_fig <- plot(sm(viz, 4))+
+  l_fitRaster()+
+  scale_fill_gradient2(low = "red", high = "blue", mid = "grey", na.value = "white")+
+  ggtitle(NULL)+
+  guides(fill = guide_colorbar(title = expression("k"[z]*" (m"^{-1}*")")))+ 
+  #scale_y_continuous(limits = c(-1.3, 1.3))+
+  xlab(expression("Wind speed, t"[0]~"(m s"^{-1}*")"))+
+  ylab("Wind direction (degrees)")+
+  theme_pub
+
+year_smooth_df <- expand.grid(year = 2013:2017, doy=80:295, site = 1) %>% 
+  mutate(wnd_mean = mean(model_df$wnd_mean),
+         wnd_mean_lag1 = mean(model_df$wnd_mean_lag1),
+         wnd_mean_lag2 = mean(model_df$wnd_mean_lag2),
+         wnd_dir = mean(model_df$wnd_dir),
+         wnd_mean = mean(model_df$wnd_mean),
+         year_fact = factor(year))
+
+year_smooth_preds <- predict(gam_best$gam, newdata = year_smooth_df)
+
+gam_year_fig <- cbind(year_smooth_df, year_smooth_preds) %>%
+  ggplot(aes(doy, year_smooth_preds, col = year_fact))+
+  geom_line()+
+  coord_cartesian(ylim=c(0, 2))+
+  scale_color_brewer(name = "Year", palette="Dark2")+
+  ylab(expression("k"[z]*" (m"^{-1}*")"))+
+  xlab("Day of year")
+
+all_model_fig <- gam_wnd_fig$ggObj + gam_wnd_lag1_fig$ggObj + gam_wnd_lag2_fig$ggObj + gam_dir_fig$ggObj +
+  gam_inter_fig$ggObj + gam_year_fig +
+  plot_layout(guides = "collect", ncol=2)+plot_annotation(tag_levels = "A") &
+  theme(legend.position='bottom') &
+  guides(fill=guide_colorbar(title.position = "top", barwidth = 10, title = expression("k"[z]*" (m"^{-1}*")")), color = guide_legend(title.position = "top"))
+
+ggsave(paste0(figures_path, "all_model_fig.png"), all_model_fig, width = 174, height = 234, units = "mm")
+
+#obs-pred figure
+obs_pred_fig <- model_df %>% 
+  mutate(prediction = predict(gam_best$gam)) %>% 
   ggplot(aes(kz_hobo, prediction))+
-  geom_point(alpha=0.2)+
+  geom_point(alpha=0.1)+
   geom_abline(intercept = 0, slope=1, linetype = 2)+
   ylim(-1, 2.5)+
   xlim(-1, 2.5)+
-  ylab("Predicted log(kz)")+
-  xlab("Observed log(kz)")
+  ylab(expression("Predicted log(k"[z]*")"))+
+  xlab(expression("Observed log(k"[z]*")"))
 
-
-viz <- getViz(gam_best$gam)
-print(plot(viz), pages = 1)
+ggsave(paste0(figures_path, "obs_pred_fig.png"), obs_pred_fig, width = 84, height = 84, units = "mm")

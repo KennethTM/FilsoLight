@@ -97,17 +97,16 @@ saveRDS(mod_sel, paste0(modeling_path, "gam_model_selection.rds"))
 
 stopCluster(cl)
 
-
-###
-
-
 #Fit best model, inspect and save
-form_best <- formula(kz_hobo ~ 
-                       s(site, bs="re")+
+form_best <- formula(kz_hobo ~
+                       s(site, bs = "re")+
                        s(wnd_mean)+
                        wnd_mean_lag1+
-                       s(wnd_dir, bs = "cc")+
-                       s(doy, bs = "cc", by = year_fact, k=20))
+                       wnd_mean_lag2+
+                       s(wnd_dir, bs = "cc", k=15)+
+                       ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
+                       s(doy, by=year_fact, k=15)+
+                       year)
 
 gam_best <- gamm(form_best, 
                  correlation = corCAR1(form = ~ as.numeric(date)|site),
@@ -117,7 +116,6 @@ summary(gam_best$gam)
 acf(resid(gam_best$lme, type = "normalized"))
 pacf(resid(gam_best$lme, type = "normalized"))
 plot(Variogram(gam_best$lme, form = ~ as.numeric(date)|site, data = model_df))
-gam.check(gam_best$gam)
 par(mfrow=c(2,2))  
 gam.check(gam_best$gam)  
 

@@ -25,27 +25,28 @@ land_light_day <- inner_join(land_par, land_lux) %>%
   summarise(lux = sum(lux), par = sum(par), n = n()) %>% 
   filter(n == 144)
 
-land_light_model <- lm(par ~ poly(lux, 2), data = land_light_day)
+land_light_model <- lm(par ~ lux - 1, data = land_light_day) 
 plot(resid(land_light_model))
 summary(land_light_model)
 
 land_light_day %>% 
-  ggplot(aes(lux, par))+
+  ggplot(aes(x = lux, y = par))+
   geom_point()+
-  geom_smooth(method = "lm", formula = "y ~ poly(x, 2)")
+  coord_cartesian(xlim=c(0, 500000), ylim=c(0, 5000))+
+  geom_smooth(method = "lm", formula = "y ~ x - 1")
 
 #Read hobo light data
 read_hobo_csv <- function(file){
   df <- read.csv(file, skip = 1)
   names(df) <- c("rowid", "datetime", "wtr", "lux")
   
-  stat_depth <- str_split(str_sub(basename(file), end=-5), "_")[[1]]
+  stat_hob <- str_split(str_sub(basename(file), end=-5), "_")[[1]]
   
   df_clean <- df %>% 
     tbl_df() %>% 
     mutate(datetime_utc = round_date(dmy_hms(datetime) -2*60*60, "10 mins"),
-           station = parse_number(stat_depth[1]),
-           hob = parse_number(stat_depth[2]),
+           station = parse_number(stat_hob[1]),
+           hob = parse_number(stat_hob[2]),
            date = as_date(datetime_utc)) %>% 
     select(datetime_utc, date, station, hob, wtr, lux)
   
@@ -60,41 +61,43 @@ light_df <- bind_rows(light_list)
 light_day <- light_df %>% 
   group_by(date, station, hob) %>% 
   summarise(lux_sum = sum(lux), n = n()) %>% 
-  filter(n == 144, 
-         lux_sum > 500) %>% 
   ungroup() %>% 
   mutate(par = predict(land_light_model, newdata = data.frame(lux = lux_sum))) %>% 
+  filter(n == 144, 
+         lux_sum > (70896*0.01)) %>% #1% of mean
   select(-n, -lux_sum)
 
 hobo_kz <- function(df){
   obs <- nrow(df)
-  df$hob_m <- df$hob/100
+  df$depth_m <- 3 - (df$hob/100)
   df$log_par <- log(df$par)
   
   if(obs <= 1){
     kz <- NA
   }else if(obs == 2){
-    kz <- (df$log_par[2] - df$log_par[1]) / (df$hob_m[2] - df$hob_m[1])
+    kz <- (df$log_par[2] - df$log_par[1]) / (df$depth_m[2] - df$depth_m[1])
   }else{
-    kz_lm <- lm(df$log_par ~ df$hob_m)
+    kz_lm <- lm(df$log_par ~ df$depth_m)
     kz <- coef(kz_lm)[2]
   }
-  return(kz)
+  
+  return((kz * -1))
   
 }
 
 light_kz <- light_day %>% 
-  arrange(date, station, hob) %>% 
+  arrange(date, station, desc(hob)) %>% 
   nest(data = c(hob, par)) %>% 
   mutate(kz = map_dbl(data, hobo_kz)) %>% 
+  na.omit() %>% 
   filter(kz > 0) %>% 
   select(-data)
 
-light_kz %>% 
-  mutate(doy = yday(date),
-         year = year(date)) %>% 
-  ggplot(aes(doy, kz, col = factor(station)))+
-  geom_line()+
-  facet_grid(year~.)
+# light_kz %>% 
+#   mutate(doy = yday(date),
+#          year = year(date)) %>% 
+#   ggplot(aes(doy, kz, col = factor(station)))+
+#   geom_line()+
+#   facet_grid(year~.)
 
-saveRDS(light_kz, paste0(rawdata_path, "light/light_kz.rds"))
+saveRDS(light_kz, paste0(rawdata_path, "light_kz.rds"))

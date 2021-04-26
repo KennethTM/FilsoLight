@@ -94,16 +94,16 @@ map_fig <- lake_map/mean_fetch_plot/weighted_mean_fetch_plot + plot_layout(guide
 ggsave(paste0(figures_path, "map_fig.png"), map_fig, width = 129, height = 234, units = "mm")
 
 #Figure 2
-kz_fig_data <- kz_dmi_wnd %>% 
-  mutate(site_label = paste0("St. ", logger_site),
+kz_fig_data <- kz_wnd %>% 
+  mutate(site_label = paste0("St. ", station),
          year = year(date),
          doy = yday(date)) 
 
 kz_fig <- kz_fig_data %>% 
-  ggplot(aes(doy, kz_hobo, col = site_label))+
+  ggplot(aes(doy, kz, col = site_label))+
   geom_vline(xintercept = 80, linetype = 2)+
   geom_vline(xintercept = 295, linetype = 2)+
-  geom_rect(inherit.aes=FALSE, aes(xmin = doy, xmax = doy+1, ymin=18, ymax=20, fill = wnd_mean))+
+  geom_rect(inherit.aes=FALSE, aes(xmin = doy, xmax = doy+1, ymin=9, ymax=10.5, fill = wnd_mean))+
   geom_line()+
   scale_color_viridis_d(name = "Station")+
   scale_fill_gradient(low = grey(0.9), high = grey(0), name = expression("Wind speed (m s"^{-1}*")"))+
@@ -116,47 +116,46 @@ kz_fig <- kz_fig_data %>%
 ggsave(paste0(figures_path, "kz_fig.png"), kz_fig, width = 174, height = 234, units = "mm")
 
 #Figure 3
-kz_st_means <- kz_fig_data %>% 
-  group_by(site_label) %>% 
-  summarise(kz_mean = mean(kz_hobo))
-
-kz_site_fig <- kz_fig_data %>% 
-  left_join(kz_st_means) %>% 
-  ggplot(aes(kz_hobo, fill=site_label))+
-  geom_density(alpha = 0.5, col = "white")+
-  geom_vline(aes(xintercept=kz_mean, col = site_label), linetype=2, show.legend = FALSE)+
-  scale_fill_viridis_d(name = "Station")+
-  scale_color_viridis_d(name = "Station")+
-  coord_cartesian(xlim=c(0, 10))+
-  ylab("Density")+
-  xlab(expression("Light attenuation (k"[z]*", m"^{-1}*")"))+
-  theme(legend.position = c(0.8, 0.7))
-
-ggsave(paste0(figures_path, "kz_site_fig.png"), kz_site_fig, width = 129, height = 100, units = "mm")
+# kz_st_means <- kz_fig_data %>% 
+#   group_by(site_label) %>% 
+#   summarise(kz_mean = mean(kz))
+# 
+# kz_site_fig <- kz_fig_data %>% 
+#   left_join(kz_st_means) %>% 
+#   ggplot(aes(kz, fill=site_label))+
+#   geom_density(alpha = 0.5, col = "white")+
+#   geom_vline(aes(xintercept=kz_mean, col = site_label), linetype=2, show.legend = FALSE)+
+#   scale_fill_viridis_d(name = "Station")+
+#   scale_color_viridis_d(name = "Station")+
+#   coord_cartesian(xlim=c(0, 10))+
+#   ylab("Density")+
+#   xlab(expression("Light attenuation (k"[z]*", m"^{-1}*")"))+
+#   theme(legend.position = c(0.8, 0.7))
+# 
+# ggsave(paste0(figures_path, "kz_site_fig.png"), kz_site_fig, width = 129, height = 100, units = "mm")
 
 #Figure 4
 cdom_fig <- filso_chem %>% 
   mutate(year = year(date),
          doy = yday(date),
          month = month(date),
-         cdom_abs_coef = 2.303*value_mean/0.01,
          chem_site_label = case_when(chem_site == "indløb" ~ "Inlet",
                                      chem_site == "udløb" ~ "Outlet",
                                      chem_site == "mellemsø" ~ "Northern basin",
                                      chem_site == "søndersø" ~ "Southern basin",
                                      TRUE ~ "other"),
          chem_site_label = factor(chem_site_label, levels = c("Inlet", "Southern basin", "Northern basin", "Outlet"))) %>%
-  filter(variable == "cdom_400",
+  filter(variable == "abs_coef_440",
          year %in% 2013:2017) %>%
-  ggplot(aes(doy, cdom_abs_coef, col = chem_site_label))+
+  ggplot(aes(doy, value_mean, col = chem_site_label))+
   geom_vline(xintercept = 80, linetype = 2)+
   geom_vline(xintercept = 295, linetype = 2)+
   geom_line()+
   geom_point()+
-  scale_color_viridis_d(name = "Sampling site", option = "B", direction = -1)+
+  scale_color_viridis_d(name = "Station", option = "B", direction = -1)+
   xlab("Month")+
   facet_grid(year~.)+
-  ylab(expression("CDOM"[400]~"abs. coef. (m"^{-1}*")"))+
+  ylab(expression("CDOM (a"[440]*", m"^{-1}*")"))+
   xlab("Day of year")+
   theme(legend.position = "bottom")
 
@@ -168,15 +167,17 @@ chl_fig <- chla %>%
          month = month(date),
          doy = yday(date),
          week = week(date)) %>%
-  group_by(year, month) %>% 
-  summarise(chl = mean(chla_ug_l)) %>% 
+  #group_by(year, month) %>% 
+  #summarise(chl = mean(chla_mg_l)) %>% 
   filter(year %in% 2013:2017) %>% 
-  ggplot(aes(month, chl, col = factor(year)))+
+  ggplot(aes(doy, chla_mg_l, col = factor(year)))+
+  geom_vline(xintercept = 80, linetype = 2)+
+  geom_vline(xintercept = 295, linetype = 2)+
   geom_line()+
-  scale_x_continuous(breaks = 1:12)+
+  #scale_x_continuous(breaks = 1:12)+
   scale_color_brewer(name = "Year", palette="Dark2")+
   xlab("Month")+
-  ylab(expression("Chlorophyll"~italic(a)~"("*mu*"g L"^{-1}*")"))
+  ylab(expression("Chlorophyll"~italic(a)~"(mg L"^{-1}*")"))
 
 wnd_speed_fig <- wnd_dmi %>% 
   dplyr::select(date, wnd_mean, wnd_dir) %>% 
@@ -208,15 +209,15 @@ gam_best <- readRDS(paste0(modeling_path, "gam_best.rds"))
 
 viz <- getViz(gam_best$gam)
 
-fig_ylims <- c(-0.1, 0.6)
+fig_ylims <- c(-0.5, 2.5)
 
-gam_wnd_fig <- plot(sm(viz, 2))+
+gam_wnd_fig <- plot(sm(viz, 1))+
   l_ciPoly()+
   l_fitLine()+
   l_rug()+
   coord_cartesian(ylim = fig_ylims)+
   xlab(expression("Wind speed, t"[0]~"(m s"^{-1}*")"))+
-  ylab(expression("log(k"[z]*")"))+
+  ylab(expression(k[z]~"(m"^{-1}*")"))+
   theme_pub
 
 gam_wnd_lag1_fig <- plot(pterm(viz, 1))+
@@ -225,7 +226,7 @@ gam_wnd_lag1_fig <- plot(pterm(viz, 1))+
   l_rug()+
   coord_cartesian(ylim = fig_ylims)+
   xlab(expression("Wind speed, t"[-1]~"(m s"^{-1}*")"))+
-  ylab(expression("log(k"[z]*")"))+
+  ylab(expression(k[z]~"(m"^{-1}*")"))+
   theme_pub
 
 gam_wnd_lag2_fig <- plot(pterm(viz, 2))+
@@ -234,24 +235,24 @@ gam_wnd_lag2_fig <- plot(pterm(viz, 2))+
   l_rug()+
   coord_cartesian(ylim = fig_ylims)+
   xlab(expression("Wind speed, t"[-2]~"(m s"^{-1}*")"))+
-  ylab(expression("log(k"[z]*")"))+
+  ylab(expression(k[z]~"(m"^{-1}*")"))+
   theme_pub
 
-gam_dir_fig <- plot(sm(viz, 3))+
+gam_dir_fig <- plot(sm(viz, 2))+
   l_ciPoly()+
   l_fitLine()+
   l_rug()+
   coord_cartesian(ylim = fig_ylims)+
   xlab("Wind direction (degrees)")+
-  ylab(expression("log(k"[z]*")"))+
+  ylab(expression(k[z]~"(m"^{-1}*")"))+
   theme_pub
 
-gam_inter_fig <- plot(sm(viz, 4))+
+#plotRGL(sm(viz, 3))
+gam_inter_fig <- plot(sm(viz, 3))+
   l_fitRaster()+
   scale_fill_gradient2(low = "red", high = "blue", mid = "grey", na.value = "white")+
   ggtitle(NULL)+
-  guides(fill = guide_colorbar(title = expression("log(k"[z]*")")))+ 
-  #scale_y_continuous(limits = c(-1.3, 1.3))+
+  guides(fill = guide_colorbar(title = expression(k[z]~"(m"^{-1}*")")))+ 
   xlab(expression("Wind speed, t"[0]~"(m s"^{-1}*")"))+
   ylab("Wind direction (degrees)")+
   theme_pub
@@ -269,16 +270,16 @@ year_smooth_preds <- predict(gam_best$gam, newdata = year_smooth_df)
 gam_year_fig <- cbind(year_smooth_df, year_smooth_preds) %>%
   ggplot(aes(doy, year_smooth_preds, col = year_fact))+
   geom_line()+
-  coord_cartesian(ylim=c(0, 2))+
+  coord_cartesian(ylim=c(-2, 6))+
   scale_color_brewer(name = "Year", palette="Dark2")+
-  ylab(expression("log(k"[z]*")"))+
+  ylab(expression("k"[z]))+
   xlab("Day of year")
 
 all_model_fig <- gam_wnd_fig$ggObj + gam_wnd_lag1_fig$ggObj + gam_wnd_lag2_fig$ggObj + gam_dir_fig$ggObj +
   gam_inter_fig$ggObj + gam_year_fig +
   plot_layout(guides = "collect", ncol=2)+plot_annotation(tag_levels = "A") &
   theme(legend.position='bottom') &
-  guides(fill=guide_colorbar(title.position = "top", barwidth = 10, title = expression("log(k"[z]*")")), color = guide_legend(title.position = "top"))
+  guides(fill=guide_colorbar(title.position = "top", barwidth = 10, title = expression(k[z]~"(m"^{-1}*")")), color = guide_legend(title.position = "top"))
 
 ggsave(paste0(figures_path, "all_model_fig.png"), all_model_fig, width = 174, height = 234, units = "mm")
 
@@ -287,12 +288,55 @@ obs_pred_fig <- model_df %>%
   mutate(prediction = predict(gam_best$gam)) %>% 
   #mutate(rmse = sqrt(mean((kz_hobo-prediction)^2)),
   #       mae = mean(abs(kz_hobo-prediction)))
-  ggplot(aes(kz_hobo, prediction))+
+  ggplot(aes(kz, prediction))+
   geom_point(alpha=0.1)+
   geom_abline(intercept = 0, slope=1, linetype = 2)+
-  ylim(-1, 2.5)+
-  xlim(-1, 2.5)+
-  ylab(expression("Predicted log(k"[z]*")"))+
-  xlab(expression("Observed log(k"[z]*")"))
+  ylim(0, 8)+
+  xlim(0, 8)+
+  ylab(expression(Predicted~k[z]~"(m"^{-1}*")"))+
+  xlab(expression(Observed~k[z]~"(m"^{-1}*")"))
 
 ggsave(paste0(figures_path, "obs_pred_fig.png"), obs_pred_fig, width = 84, height = 84, units = "mm")
+
+#Partioning figure
+library(zoo)
+
+kz_southern <- light_kz %>% 
+  filter(station %in% c(1, 2)) %>% 
+  group_by(date) %>% 
+  summarise(kz = mean(kz, na.rm = TRUE))
+
+cdom_southern <- filso_chem %>% 
+  filter(variable == "kz_cdom", 
+         chem_site %in% c("indløb", "søndersø")) %>% 
+  group_by(date) %>% 
+  summarise(kz_cdom = mean(value_mean, na.rm=TRUE)) %>% 
+  right_join(data.frame(date = seq(ymd("2013-01-01"), ymd("2017-12-31"), by = "day"))) %>% 
+  arrange(date) %>% 
+  mutate(kz_cdom = na.approx(kz_cdom, na.rm = FALSE)) %>% 
+  na.omit()
+
+chl_southern <- chla %>% 
+  select(date, kz_chla) %>% 
+  right_join(data.frame(date = seq(ymd("2013-01-01"), ymd("2017-12-31"), by = "day"))) %>% 
+  arrange(date) %>% 
+  mutate(kz_chla = na.approx(kz_chla, na.rm = FALSE)) %>% 
+  na.omit()
+
+kz_water <- 0.027
+
+kz_part <- kz_southern %>% 
+  left_join(cdom_southern) %>% 
+  left_join(chl_southern) %>% 
+  mutate(kz_nonalgal = kz - kz_cdom - kz_chla - kz_water)
+
+kz_part %>% 
+  select(-kz) %>% 
+  gather(variable, value, -date) %>% 
+  mutate(year = year(date),
+         month = month(date),
+         doy = yday(date)) %>% 
+  ggplot(aes(doy, value, fill=variable))+
+  geom_area()+
+  scale_fill_manual(values = c("kz_cdom" = "coral", "kz_chla" = "darkgreen", "kz_nonalgal" = "grey"))+
+  facet_grid(year~.)

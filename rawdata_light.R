@@ -64,7 +64,7 @@ light_day <- light_df %>%
   ungroup() %>% 
   mutate(par = predict(land_light_model, newdata = data.frame(lux = lux_sum))) %>% 
   filter(n == 144, 
-         lux_sum > (70896*0.01)) %>% #1% of mean
+         lux_sum > 500) %>% #1% of mean
   select(-n, -lux_sum)
 
 hobo_kz <- function(df){

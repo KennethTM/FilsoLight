@@ -5,15 +5,15 @@ summary(model_df)
 
 #initial gam - check smoothing of predictor terms
 gam_1 <- gam(kz ~
-               s(station, bs = "re")+
                s(wnd_mean)+
                s(wnd_mean_lag1)+
                s(wnd_mean_lag2)+
                s(wnd_mean_lag3)+
                s(wnd_dir, bs = "cc")+
                ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
-               s(doy, by=year_fact)+
-               year,
+               s(doy)+
+               s(year, k=4)+
+               ti(doy, year),
              data = model_df)
 summary(gam_1)
 plot(gam_1, pages=1, residuals=TRUE)
@@ -27,8 +27,9 @@ gam_2 <- gam(kz ~
                wnd_mean_lag3+
                s(wnd_dir, bs = "cc", k = 15)+
                ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
-               s(doy, by=year_fact, k = 15)+
-               year,
+               s(doy)+
+               s(year, k=4)+
+               ti(doy, year),
              data = model_df)
 summary(gam_2)
 plot(gam_2, pages=1, residuals=TRUE)
@@ -38,7 +39,7 @@ rsd <- residuals(gam_2)
 gam(rsd~s(wnd_mean, bs = "cs"), gamma=1.4, data=model_df)
 gam(rsd~s(wnd_dir, bs = "cs"), gamma=1.4, data=model_df) 
 gam(rsd~ti(wnd_mean, wnd_dir, bs="cs"), gamma=1.4, data=model_df) 
-gam(rsd~s(doy, by=year_fact, bs="cs"), gamma=1.4, data=model_df) #increase k
+gam(rsd~s(doy, bs="cs"), gamma=1.4, data=model_df) #increase k
 gam.check(gam_2)
 
 #Fit models using different correlations structures
@@ -49,8 +50,9 @@ form <- formula(kz ~
                   wnd_mean_lag3+
                   s(wnd_dir, bs = "cc", k = 15)+
                   ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
-                  s(doy, by=year_fact, k = 15)+
-                  year)
+                  s(doy)+
+                  s(year, k=4)+
+                  ti(doy, year))
 
 gam_nocorr <- gamm(form, 
                    random = list(station = ~1),
@@ -90,10 +92,10 @@ clusterExport(cl, "model_df")
 
 mod_sel <- pdredge(gam_car_wrap,
                    cluster = cl,
-                   rank = "AICc",
+                   rank = "AIC",
                    fixed = c('s(wnd_mean, k = 15)',
                              's(wnd_dir, bs = "cc", k = 15)',
-                             's(doy, by = year_fact, k = 15)'))
+                             's(doy)'))
 
 saveRDS(mod_sel, paste0(modeling_path, "gam_model_selection.rds"))
 
@@ -103,11 +105,11 @@ stopCluster(cl)
 form_best <- formula(kz ~
                        s(wnd_mean, k = 15)+
                        wnd_mean_lag1+
-                       wnd_mean_lag2+
                        s(wnd_dir, bs = "cc", k = 15)+
                        ti(wnd_mean, wnd_dir, bs=c("tp", "cc"))+
-                       s(doy, by=year_fact, k = 15)+
-                       year)
+                       s(doy)+
+                       s(year, k=4)+
+                       ti(doy, year))
 
 gam_best <- gamm(form_best, 
                  correlation = corCAR1(form = ~doy|year), 

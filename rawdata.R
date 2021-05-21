@@ -40,8 +40,9 @@ df_cdom <- bind_rows(list_cdom) %>%
   # group_by(date, location) %>% 
   # summarise(mean_abs_coef = mean(abs_coef)) %>% 
   select(date, location, A_440 = `440`, A_750 = `750`) %>%
-  mutate(abs_coef_440 = 2.303*(A_440 - A_750)/0.01,
-         kz_cdom = abs_coef_440 * 0.221) %>% 
+  mutate(abs_coef_440 = 2.303*(A_440 - A_750)/0.01) %>%
+  mutate(kz_cdom_pfannkuche = abs_coef_440 * 0.221, #
+         kz_cdom_balogh = 0.0172*(18.216*abs_coef_440-0.209)) %>%
   gather(variable, value, -date, -location)
 
 #Filsø combined chemistry (nutrients and cdom)
@@ -57,6 +58,12 @@ filso_chem <- bind_rows(df_cdom, df_all_nutrients) %>%
   summarise(value_mean = mean(value_pos)) %>% 
   ungroup() %>% 
   rename(chem_site = site)
+
+# #Chem stats
+# filso_chem %>% 
+#   filter(chem_site != "indløb", year(date) %in% 2013:2017) %>% 
+#   group_by(variable) %>%
+#   summarise(mean = mean(value_mean), sd=sd(value_mean),n =n())
 
 #Read light data
 light_kz <- readRDS(paste0(rawdata_path, "light_kz.rds"))

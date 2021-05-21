@@ -64,7 +64,7 @@ light_day <- light_df %>%
   ungroup() %>% 
   mutate(par = predict(land_light_model, newdata = data.frame(lux = lux_sum))) %>% 
   filter(n == 144, 
-         lux_sum > 500) %>% #1% of mean
+         lux_sum > 500) %>%
   select(-n, -lux_sum)
 
 hobo_kz <- function(df){
@@ -101,3 +101,11 @@ light_kz <- light_day %>%
 #   facet_grid(year~.)
 
 saveRDS(light_kz, paste0(rawdata_path, "light_kz.rds"))
+
+
+
+light_df %>% 
+  filter(station %in% c(1, 2)) %>% 
+  group_by(date) %>% 
+  summarise(mean_wtr_south = mean(wtr)) %>% 
+  saveRDS("south_wtr.rds")

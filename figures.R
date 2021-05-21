@@ -33,69 +33,16 @@ eu_map <- ggplot()+
   geom_sf(data = eu, fill = NA, col = "black")+
   geom_sf(data = boundary_centroid, size = 2, col = "red")
 
-#Station fetch stats
-wnd_dir_freq <- wnd_dmi %>% 
-  mutate(wnd_dir_cut = cut(wnd_dir, breaks=seq(0, 360, 10))) %>% 
-  group_by(wnd_dir_cut) %>% 
-  summarise(freq=n()/nrow(.)) %>% 
-  add_row(wnd_dir_cut="(350,360]", freq=0) %>% 
-  add_row(wnd_dir_cut="(0,10]", freq=0) %>% 
-  add_row(wnd_dir_cut="(10,20]", freq=0) %>% 
-  arrange(wnd_dir_cut) %>% 
-  pull(freq)
-
-rast_tmp <- raster(boundary, res = 5)
-st_stations <- st %>% filter(Name %in% paste0("St. ", 1:4))
-rast <- rasterize(as(boundary, "Spatial"), rast_tmp, field = 1)
-rast_islake <- (rast ==  1)
-rast_fetch <- fetch(rast_islake, angle = seq(5, 355, 10))
-rast_fetch_weight <- rast_fetch*wnd_dir_freq
-
-rast_fetch_weight_mean <- calc(rast_fetch_weight, fun=sum)
-rast_fetch_mean <- calc(rast_fetch, fun=mean)
-rast_fetch_min <- calc(rast_fetch, fun=min)
-rast_fetch_max <- calc(rast_fetch, fun=max)
-fetch_stack <- stack(rast_fetch_mean, rast_fetch_weight_mean, rast_fetch_min, rast_fetch_max)
-
-st_fetch_stats <- extract(fetch_stack, as(st_stations, "Spatial")) %>% 
-  as.data.frame() %>% 
-  set_names(c("mean", "weighted_mean", "min", "max")) %>% 
-  cbind(st_stations["Name"], .)
-
-#plot mean and weighted mean fetch and combine in figure 1
-rast_fetch_mean_latlon <- projectRaster(rast_fetch_mean, crs=4326)
-rast_fetch_weight_mean_latlon <- projectRaster(rast_fetch_weight_mean, crs=4326)
-
-fetch_mean_df <- as.data.frame(rast_fetch_mean_latlon, xy=TRUE, na.rm = TRUE)
-fetch_mean_weight_df <- as.data.frame(rast_fetch_weight_mean_latlon, xy=TRUE, na.rm = TRUE)
-
-mean_fetch_plot <- fetch_mean_df %>% 
-  ggplot(aes(x, y, fill=layer))+
-  geom_raster()+
-  scale_fill_viridis_c(option = "D", name = "Fetch (m)", limits = c(0, 1340), breaks = c(0, 400, 800, 1200))+
-  xlab(NULL)+
-  ylab("Latitude")+
-  scale_x_continuous(breaks = c(8.21, 8.235, 8.26))+
-  geom_sf(data = st_transform(boundary, 4326), inherit.aes = FALSE, fill = NA, col = "black")
-
-weighted_mean_fetch_plot <- fetch_mean_weight_df %>% 
-  ggplot(aes(x, y, fill=layer))+
-  geom_raster()+
-  scale_fill_viridis_c(option = "D", name = "Fetch (m)", limits = c(0, 1340), breaks = c(0, 400, 800, 1200))+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  scale_x_continuous(breaks = c(8.21, 8.235, 8.26))+
-  geom_sf(data = st_transform(boundary, 4326), inherit.aes = FALSE, fill = NA, col = "black")
-
-map_fig <- lake_map/mean_fetch_plot/weighted_mean_fetch_plot + plot_layout(guides="collect") + plot_annotation(tag_levels = "A") #:inset_element(, -0.4, 0.6, 0.1, 1, align_to = "full")
-
-ggsave(paste0(figures_path, "map_fig.png"), map_fig, width = 100, height = 234, units = "mm")
+#Export seperately and combine in Inkscape
+ggsave(paste0(figures_path, "map_1_fig.svg"), lake_map, width = 100, height = 100, units = "mm")
+ggsave(paste0(figures_path, "map_2_fig.svg"), eu_map, width = 100, height = 100, units = "mm")
 
 #Figure 2
 kz_fig_data <- kz_wnd %>% 
   mutate(site_label = paste0("St. ", station),
          year = year(date),
-         doy = yday(date)) %>% 
+         doy = yday(date),
+         z_ten_perc = 2.3/kz) %>% 
   filter(!(station == 4 & doy > 210 & year == 2016)) #bad period
 
 kz_fig <- kz_fig_data %>% 
@@ -151,7 +98,7 @@ cdom_fig <- filso_chem %>%
   geom_vline(xintercept = 295, linetype = 2)+
   geom_line()+
   geom_point()+
-  scale_color_brewer(name = "Year", palette="Dark2")+
+  scale_color_brewer(name = "Site", palette="Dark2")+
   xlab("Month")+
   facet_grid(year~.)+
   ylab(expression("CDOM (a"[440]*", m"^{-1}*")"))+
@@ -197,7 +144,7 @@ wnd_dir_fig <- wnd_dmi %>%
   scale_fill_brewer(name = "Year", palette="Dark2")+
   xlab("Wind direction (degrees)")+
   ylab("Density")+
-  scale_x_continuous(breaks = seq(0, 315, 45))
+  scale_x_continuous(breaks = seq(0, 360, 45), limits = c(0, 360))
 
 all_vars_fig <- chl_fig+wnd_speed_fig+wnd_dir_fig+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
 
@@ -251,24 +198,6 @@ gam_inter_fig <- plot(sm(viz, 3))+
   xlab(expression("Wind speed (t"[0]*", m s"^{-1}*")"))+
   ylab("Wind direction (degrees)")+
   theme_pub
-
-# year_smooth_df <- expand.grid(year = 2013:2017, doy=80:295, site = 1) %>% 
-#   mutate(wnd_mean = mean(model_df$wnd_mean),
-#          wnd_mean_lag1 = mean(model_df$wnd_mean_lag1),
-#          wnd_mean_lag2 = mean(model_df$wnd_mean_lag2),
-#          wnd_dir = mean(model_df$wnd_dir),
-#          wnd_mean = mean(model_df$wnd_mean),
-#          year_fact = factor(year))
-# 
-# year_smooth_preds <- predict(gam_best$gam, newdata = year_smooth_df)
-# 
-# gam_year_fig <- cbind(year_smooth_df, year_smooth_preds) %>%
-#   ggplot(aes(doy, year_smooth_preds, col = year_fact))+
-#   geom_line()+
-#   coord_cartesian(ylim=c(-2, 6))+
-#   scale_color_brewer(name = "Year", palette="Dark2")+
-#   ylab(expression("k"[z]))+
-#   xlab("Day of year")
 
 gam_doy_fig <- plot(sm(viz, 4))+
   l_ciPoly()+
@@ -325,8 +254,8 @@ kz_southern <- light_kz %>%
   summarise(kz = mean(kz, na.rm = TRUE))
 
 cdom_southern <- filso_chem %>% 
-  filter(variable == "kz_cdom", 
-         chem_site %in% c("indløb", "søndersø")) %>% 
+  filter(variable == "kz_cdom_balogh", 
+         chem_site == "søndersø") %>% 
   group_by(date) %>% 
   summarise(kz_cdom = mean(value_mean, na.rm=TRUE)) %>% 
   right_join(data.frame(date = seq(ymd("2013-01-01"), ymd("2017-12-31"), by = "day"))) %>% 
@@ -365,7 +294,8 @@ kd_comps <- kz_part %>%
                              variable == "kz_particle" ~ "Particles",
                              variable == "kz_water" ~ "Water"),
          kz_comp = factor(kz_comp, levels = c("Chl. a", "CDOM", "Particles", "Water"))) %>% 
-  filter(year == 2014 & doy >= 80)  %>% 
+  filter(year == 2014)  %>% 
+  filter(between(doy, 80, 295)) %>% 
   ggplot(aes(doy, value, fill=kz_comp))+
   geom_area()+
   scale_fill_brewer(name = "Component", palette="Dark2")+
@@ -386,7 +316,8 @@ kd_comps_perc <- kz_part %>%
                              variable == "kz_particle_perc" ~ "Particles",
                              variable == "kz_water_perc" ~ "Water"),
          kz_comp = factor(kz_comp, levels = c("Chl. a", "CDOM", "Particles", "Water"))) %>% 
-  filter(year == 2014 & doy >= 80) %>% 
+  filter(year == 2014)  %>% 
+  filter(between(doy, 80, 295)) %>% 
   ggplot(aes(doy, value, fill=kz_comp))+
   geom_area()+
   scale_fill_brewer(name = "Component", palette="Dark2")+
@@ -398,3 +329,25 @@ kd_comps_perc <- kz_part %>%
 fig_partitioning <- kd_comps+kd_comps_perc+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
 
 ggsave(paste0(figures_path, "fig_partitioning.png"), fig_partitioning, width = 174, height = 129, units = "mm")
+
+#Figure showing colonized max depth and 10% light depth
+depth_data <- kz_fig_data %>% 
+  filter(kz > 0.3) %>% 
+  group_by(year) %>% 
+  summarise(mean = mean(z_ten_perc), sd = sd(z_ten_perc)) %>% 
+  add_column(max_depth = c(0.49, 0.78, 0.94, 1.19, 1.04)) 
+
+depth_plot <- depth_data %>% 
+  ggplot()+
+  geom_linerange(aes(year, mean, ymin = mean-sd, ymax=mean+sd, col = "z[10%] (m)"), linetype = 3)+
+  geom_line(aes(year, mean, col = "z[10%] (m)"))+
+  geom_point(aes(year, mean, col = "z[10%] (m)"), size = 2.5)+
+  geom_point(aes(year, max_depth, col = "Max. colonization depth (m)"), size = 2.5)+
+  geom_line(aes(year, max_depth, col = "Max. colonization depth (m)"))+
+  coord_cartesian(ylim=c(0, 1.6))+
+  ylab("Depth (m)")+
+  xlab("Year")+
+  scale_color_manual(values = c("black", "grey"), labels = c("Max. colonization depth (m)", expression(z["10%"]~"(m)")))+
+  theme(legend.position = c(0.25, 0.87), legend.title = element_blank(), legend.text.align = 0)
+
+ggsave(paste0(figures_path, "fig_depth.png"), depth_plot, width = 129, height = 84, units = "mm")

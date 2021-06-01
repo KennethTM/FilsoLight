@@ -1,9 +1,9 @@
 source("rawdata.R")
 
-#summary of model data
+#Summary of model data
 summary(model_df)
 
-#initial gam - check smoothing of predictor terms
+#Initial gam to check smoothing of predictor terms
 gam_1 <- gam(kz ~
                s(wnd_mean)+
                s(wnd_mean_lag1)+
@@ -18,7 +18,7 @@ gam_1 <- gam(kz ~
 summary(gam_1)
 plot(gam_1, pages=1, residuals=TRUE)
 
-#make non signicant smooth terms parametric terms instead
+#Make non-signicant smooth terms parametric (linear) terms instead
 gam_2 <- gam(kz ~
                s(station, bs = "re")+
                s(wnd_mean, k = 15)+
@@ -34,7 +34,8 @@ gam_2 <- gam(kz ~
 summary(gam_2)
 plot(gam_2, pages=1, residuals=TRUE)
 
-#check k values by plotting residuals vs each smoothed predictor and change gam_2 model
+#Check k values by plotting residuals vs smoothed predictors (with penalizing cubic splice) and 
+#change k values in gam_2 model accordingly
 rsd <- residuals(gam_2)
 gam(rsd~s(wnd_mean, bs = "cs"), gamma=1.4, data=model_df)
 gam(rsd~s(wnd_dir, bs = "cs"), gamma=1.4, data=model_df) 
@@ -77,8 +78,11 @@ saveRDS(list("nocorr"=gam_nocorr, "gam_car"=gam_car, "gam_gaus"=gam_gaus),
 
 #Inspect model
 summary(gam_car$gam)
+
+#Autocorrelation reveal few slightly, significant lags but appears random from visual inspection,
+#keep model and correlation structure
 acf(resid(gam_car$lme, type = "normalized"))
-pacf(resid(gam_car$lme, type = "normalized"))
+pacf(resid(gam_car$lme, type = "normalized")) 
 plot(Variogram(gam_car$lme, data = model_df))
 
 #Compare candidate models by AIC
@@ -87,6 +91,7 @@ gam_car_wrap <- uGamm(form,
                       random = list(station = ~1),
                       data = model_df)
 
+#Fit in parallel
 cl <- makeCluster(4, type = "SOCK")
 clusterExport(cl, "model_df")
 
@@ -101,7 +106,7 @@ saveRDS(mod_sel, paste0(modeling_path, "gam_model_selection.rds"))
 
 stopCluster(cl)
 
-#Fit best model, inspect and save
+#Fit, inspect, and save best model
 form_best <- formula(kz ~
                        s(wnd_mean, k = 15)+
                        wnd_mean_lag1+

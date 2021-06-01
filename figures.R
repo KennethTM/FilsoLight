@@ -17,6 +17,7 @@ eu_poly <- st_read(paste0(getwd(), "/data/eu_poly.kmz")) %>%
 eu <- ne_countries(continent = "Europe", scale = 50) %>% 
   st_as_sf() %>% 
   st_transform(25832) %>% 
+  filter(admin %in% c("Denmark", "Sweden", "Norway")) %>% 
   st_crop(st_bbox(eu_poly))
 
 lake_map <- ggplot()+
@@ -27,7 +28,8 @@ lake_map <- ggplot()+
   scale_color_manual(values = c("Light" = "deepskyblue", "Chemistry" = "coral", "basin" = "white"), name = "")+
   xlab(NULL)+
   scale_x_continuous(breaks = c(8.21, 8.235, 8.26))+
-  ylab("Latitude")
+  ylab("Latitude")+
+  xlab("Longitude")
 
 eu_map <- ggplot()+
   geom_sf(data = eu, fill = NA, col = "black")+
@@ -331,23 +333,41 @@ fig_partitioning <- kd_comps+kd_comps_perc+plot_layout(ncol=1, guides = "collect
 ggsave(paste0(figures_path, "fig_partitioning.png"), fig_partitioning, width = 174, height = 129, units = "mm")
 
 #Figure showing colonized max depth and 10% light depth
-depth_data <- kz_fig_data %>% 
-  filter(kz > 0.3) %>% 
-  group_by(year) %>% 
-  summarise(mean = mean(z_ten_perc), sd = sd(z_ten_perc)) %>% 
-  add_column(max_depth = c(0.49, 0.78, 0.94, 1.19, 1.04)) 
+#Calculate bootstrapped percentile confidence intervals of z10%
+#https://gist.github.com/roualdes/1de1c9a4a26581ba18a7ae9b96019970
+boot_fn <- function(d, i) {
+  mean(d[i])
+}
+
+boot_perc <- function(b, probs=c(0.025, 0.5, 0.975),
+                       nms=c("lower_bound", "median", "upper_bound")) {
+  b$t %>%
+    quantile(probs=probs) %>%
+    as.list() %>%
+    setNames(nm=nms) %>%
+    data.frame()
+}
+
+depth_data <- kz_fig_data %>%
+  filter(kz > 0.2) %>% 
+  group_by(year) %>%
+  summarise(bsamples = list(boot(z_ten_perc, boot_fn, R=1000))) %>%
+  mutate(bs = lapply(bsamples, boot_perc)) %>%
+  select(-bsamples) %>%
+  unnest(bs) %>% 
+  add_column(max_depth = c(0.49, 0.78, 0.94, 1.19, 1.04))
 
 depth_plot <- depth_data %>% 
   ggplot()+
-  geom_linerange(aes(year, mean, ymin = mean-sd, ymax=mean+sd, col = "z[10%] (m)"), linetype = 3)+
-  geom_line(aes(year, mean, col = "z[10%] (m)"))+
-  geom_point(aes(year, mean, col = "z[10%] (m)"), size = 2.5)+
-  geom_point(aes(year, max_depth, col = "Max. colonization depth (m)"), size = 2.5)+
-  geom_line(aes(year, max_depth, col = "Max. colonization depth (m)"))+
-  coord_cartesian(ylim=c(0, 1.6))+
+  geom_linerange(aes(year, median, ymin = lower_bound, ymax=upper_bound))+
+  geom_line(aes(year, median), linetype = 1)+
+  geom_point(aes(year, median, shape = "z[10%] (m)"), size = 2.5)+
+  geom_line(aes(year, max_depth), linetype = 2)+
+  geom_point(aes(year, max_depth, shape = "Max. colonization depth (m)"), size = 2.5, fill="white")+
+  #coord_cartesian(ylim=c(0, 1.6))+
   ylab("Depth (m)")+
   xlab("Year")+
-  scale_color_manual(values = c("black", "grey"), labels = c("Max. colonization depth (m)", expression(z["10%"]~"(m)")))+
+  scale_shape_manual(values = c(21, 19), labels = c("Max. colonization depth (m)", expression(z["10%"]~"(m)")))+
   theme(legend.position = c(0.25, 0.87), legend.title = element_blank(), legend.text.align = 0)
 
 ggsave(paste0(figures_path, "fig_depth.png"), depth_plot, width = 129, height = 84, units = "mm")

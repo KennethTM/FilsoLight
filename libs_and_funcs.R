@@ -2,7 +2,7 @@
 
 library(raster);library(tidyverse);library(lubridate);library(readxl);library(httr);library(jsonlite);library(mgcv)
 library(patchwork);library(mgcViz);library(MuMIn);library(snow)
-library(sf);library(rnaturalearth);library(zoo)
+library(sf);library(rnaturalearth);library(zoo);library(boot)
 
 #Figure sizing. For most journals the figures should be 39 mm, 84 mm, 129 mm, or 174 mm wide and not higher than 234 mm.
 

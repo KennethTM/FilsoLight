@@ -1,5 +1,6 @@
 source("libs_and_funcs.R")
 
+#Files
 light_files <- list.files(paste0(rawdata_path, "light"), full.names = TRUE, pattern = "st\\d")
 light_land_files <- list.files(paste0(rawdata_path, "light"), full.names = TRUE, pattern = "vejrstation*")
 
@@ -35,7 +36,7 @@ land_light_day %>%
   coord_cartesian(xlim=c(0, 500000), ylim=c(0, 5000))+
   geom_smooth(method = "lm", formula = "y ~ x - 1")
 
-#Read hobo light data
+#Read underwater hobo light data
 read_hobo_csv <- function(file){
   df <- read.csv(file, skip = 1)
   names(df) <- c("rowid", "datetime", "wtr", "lux")
@@ -65,9 +66,10 @@ light_day <- light_df %>%
   mutate(par = predict(land_light_model, newdata = data.frame(lux = lux_sum))) %>% 
   filter(n == 144, 
          lux_sum > 500) %>%
+  filter(!(station == 4 & yday(date) > 210 & year(date) == 2016)) %>% #bad period with wrongful sensor readings
   select(-n, -lux_sum)
 
-hobo_kz <- function(df){
+hobo_kz <- function(df, filter = TRUE){
   obs <- nrow(df)
   df$depth_m <- 3 - (df$hob/100)
   df$log_par <- log(df$par)
@@ -76,9 +78,17 @@ hobo_kz <- function(df){
     kz <- NA
   }else if(obs == 2){
     kz <- (df$log_par[2] - df$log_par[1]) / (df$depth_m[2] - df$depth_m[1])
+    perc_change <- (df$par[1] - df$par[2])/df$par[1]
+    if(filter & (perc_change < 0.1)){
+      kz <- NA
+    }
   }else{
     kz_lm <- lm(df$log_par ~ df$depth_m)
     kz <- coef(kz_lm)[2]
+    rsq <- summary(kz_lm)$adj.r.squared
+    if(filter & rsq < 0.5){
+      kz <- NA
+    }
   }
   
   return((kz * -1))
@@ -88,24 +98,18 @@ hobo_kz <- function(df){
 light_kz <- light_day %>% 
   arrange(date, station, desc(hob)) %>% 
   nest(data = c(hob, par)) %>% 
-  mutate(kz = map_dbl(data, hobo_kz)) %>% 
+  mutate(kz = map_dbl(data, hobo_kz, filter = TRUE)) %>% 
   na.omit() %>% 
   filter(kz > 0) %>% 
   select(-data)
 
-# light_kz %>% 
-#   mutate(doy = yday(date),
-#          year = year(date)) %>% 
-#   ggplot(aes(doy, kz, col = factor(station)))+
-#   geom_line()+
-#   facet_grid(year~.)
+#Plot data
+light_kz %>%
+  mutate(doy = yday(date),
+         year = year(date)) %>%
+  ggplot(aes(doy, kz, col = factor(station)))+
+  geom_line()+
+  facet_grid(year~.)
 
+#Write to file
 saveRDS(light_kz, paste0(rawdata_path, "light_kz.rds"))
-
-
-
-light_df %>% 
-  filter(station %in% c(1, 2)) %>% 
-  group_by(date) %>% 
-  summarise(mean_wtr_south = mean(wtr)) %>% 
-  saveRDS("south_wtr.rds")

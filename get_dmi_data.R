@@ -1,12 +1,11 @@
 source("libs_and_funcs.R")
 
-#dmi data
-#metObs v1 API
+#Get DMI data from metObs v1 REST API
 
-#api key: 
-#blåvandshuk fyr: stationId=06081
-#params: parameterId=wind_dir, parameterId=wind_speed
-#fra 2013-01-01: from=1356998400000000
+#API key: 
+#Weather station: "Blåvandshuk fyr", stationId=06081
+#Parameters: parameterId=wind_dir, parameterId=wind_speed
+#From 2013-01-01: from=1356998400000000
 
 key <- ""
 stat <- "06081"

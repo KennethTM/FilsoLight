@@ -99,7 +99,6 @@ light_kz <- light_day %>%
   arrange(date, station, desc(hob)) %>% 
   nest(data = c(hob, par)) %>% 
   mutate(kz = map_dbl(data, hobo_kz, filter = TRUE)) %>% 
-  na.omit() %>% 
   filter(kz > 0) %>% 
   select(-data)
 

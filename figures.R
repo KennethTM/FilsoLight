@@ -1,5 +1,9 @@
 source("rawdata.R")
 
+#Replace station names by numbering from S-N
+st_names <- data.frame(station = c(1, 2, 3, 4),
+                       name_new = c(1, 2, 4, 3))
+
 #Figures for manuscript
 
 #Figure 1
@@ -11,7 +15,9 @@ boundary_centroid <- boundary %>%
   st_centroid()
 
 st <- st_read(paste0(getwd(), "/data/st_filso_basins_2.kmz")) %>% 
-  st_transform(25832)
+  st_transform(25832) %>% 
+  mutate(station = parse_number(str_sub(Name, start=-1))) %>% 
+  left_join(st_names)
 
 eu_poly <- st_read(paste0(getwd(), "/data/eu_poly.kmz")) %>% 
   st_transform(25832)
@@ -24,7 +30,7 @@ eu <- ne_countries(continent = "Europe", scale = 50) %>%
 
 lake_map <- ggplot()+
   geom_sf(data = boundary, fill = NA, col = "gray")+
-  geom_sf_text(data = filter(st, str_detect(Name, "St.")), aes(label = Name), size = 2.5, nudge_x = -350, nudge_y = 100)+
+  geom_sf_text(data = filter(st, str_detect(Name, "St.")), aes(label = paste0("St. ", name_new)), size = 2.5, nudge_x = -350, nudge_y = 100)+
   geom_sf_text(data = filter(st, !str_detect(Name, "St.")), aes(label = Name), size = 2.5)+
   geom_sf(data = filter(st, str_detect(Name, "St.")), col = "black")+
   scale_color_manual(values = c("Light" = "deepskyblue", "Chemistry" = "coral", "basin" = "white"), name = "")+
@@ -43,7 +49,8 @@ ggsave(paste0(figures_path, "map_2_fig.svg"), eu_map, width = 100, height = 100,
 
 #Figure 2
 kz_fig_data <- kz_wnd %>% 
-  mutate(site_label = paste0("St. ", station),
+  left_join(st_names) %>% 
+  mutate(site_label = paste0("St. ", name_new),
          year = year(date),
          doy = yday(date),
          z_ten_perc = 2.3/kz)

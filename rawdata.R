@@ -6,7 +6,7 @@ chla <- read_xlsx(paste0(rawdata_path, "filso_chla.xlsx"), skip = 1, col_names =
   mutate(date = as_date(datetime)) %>%
   group_by(date) %>%
   summarise(chla_ug_l = mean(chla_ug_l, na.rm = TRUE)) %>% 
-  mutate(kz_chla = 0.0149*chla_ug_l) #sand-jensen og krause-jensen LO
+  mutate(kz_chla = 0.0149*chla_ug_l) #Krause-Jensen, D., Sand-Jensen, K. (1998)
 
 #Inorganic and organic nutrients
 data_years <- as.character(seq(2013, 2019, 1))
@@ -36,8 +36,8 @@ df_cdom <- bind_rows(list_cdom) %>%
          location = str_to_lower(Lokalitet)) %>%
   select(date, location, A_440 = `440`, A_750 = `750`) %>%
   mutate(abs_coef_440 = 2.303*(A_440 - A_750)/0.01) %>%
-  mutate(kz_cdom_pfannkuche = abs_coef_440 * 0.221, #
-         kz_cdom_balogh = 0.0172*(18.216*abs_coef_440-0.209)) %>%
+  mutate(kz_cdom_pfannkuche = abs_coef_440 * 0.221,
+         kz_cdom_balogh = 0.0172*(18.216*abs_coef_440-0.209)) %>% #Balogh, K.V. et al. (2009)
   gather(variable, value, -date, -location)
 
 #Combined chemistry (nutrients and CDOM)

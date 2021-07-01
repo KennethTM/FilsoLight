@@ -1,6 +1,7 @@
 #Libraries and functions
 
-library(raster);library(tidyverse);library(lubridate);library(readxl);library(httr);library(jsonlite);library(mgcv)
+library(raster);library(tidyverse);library(lubridate);library(readxl)
+library(httr);library(jsonlite);library(mgcv)
 library(patchwork);library(mgcViz);library(MuMIn);library(snow)
 library(sf);library(rnaturalearth);library(zoo);library(boot)
 

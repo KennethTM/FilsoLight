@@ -235,7 +235,7 @@ obs_pred_fig <- obs_pred_data %>%
 
 ggsave(paste0(figures_path, "obs_pred_fig.png"), obs_pred_fig, width = 84, height = 84, units = "mm")
 
-#Figure 7
+#Figure S1 (Supplementary fig. 1)
 kz_southern <- light_kz %>% 
   filter(station %in% c(1, 2)) %>% 
   group_by(date) %>% 
@@ -318,7 +318,7 @@ fig_partitioning <- kd_comps+kd_comps_perc+plot_layout(ncol=1, guides = "collect
 
 ggsave(paste0(figures_path, "fig_partitioning.png"), fig_partitioning, width = 174, height = 129, units = "mm")
 
-#Figure 8
+#Figure 7
 #Calculate bootstrapped percentile confidence intervals of z10%
 #https://gist.github.com/roualdes/1de1c9a4a26581ba18a7ae9b96019970
 boot_fn <- function(d, i) {

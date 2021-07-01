@@ -69,7 +69,7 @@ kz_fig <- kz_fig_data %>%
   xlab("Day of year")+
   theme(legend.position = "bottom")
 
-ggsave(paste0(figures_path, "kz_fig.png"), kz_fig, width = 174, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure2.png"), kz_fig, width = 174, height = 234, units = "mm")
 
 #Figure 3
 cdom_fig <- filso_chem %>% 
@@ -96,7 +96,7 @@ cdom_fig <- filso_chem %>%
   xlab("Day of year")+
   theme(legend.position = "bottom")
 
-ggsave(paste0(figures_path, "cdom_fig.png"), cdom_fig, width = 174, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure3.png"), cdom_fig, width = 174, height = 234, units = "mm")
 
 #Figure 4
 chl_fig <- chla %>%
@@ -136,7 +136,7 @@ wnd_dir_fig <- wnd_dmi %>%
 
 all_vars_fig <- chl_fig+wnd_speed_fig+wnd_dir_fig+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
 
-ggsave(paste0(figures_path, "all_vars_fig.png"), all_vars_fig, width = 129, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure4.png"), all_vars_fig, width = 129, height = 234, units = "mm")
 
 #Figure 6
 gam_best <- readRDS(paste0(modeling_path, "gam_best.rds"))
@@ -212,7 +212,7 @@ all_model_fig <- gam_wnd_fig$ggObj + gam_wnd_lag1_fig$ggObj + gam_dir_fig$ggObj 
   theme(legend.position='bottom') &
   guides(fill=guide_colorbar(title.position = "top", barwidth = 10, title = expression(K[d]~"(m"^{-1}*")")), color = guide_legend(title.position = "top"))
 
-ggsave(paste0(figures_path, "all_model_fig.png"), all_model_fig, width = 174, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure6.png"), all_model_fig, width = 174, height = 234, units = "mm")
 
 #Figure 5
 obs_pred_data <- model_df %>% 
@@ -233,7 +233,7 @@ obs_pred_fig <- obs_pred_data %>%
   annotate("text", x = -Inf, y = Inf, label = paste0("MAE == ", round(obs_pred_data$mae[1], 2), '~m^{-1}'), 
            parse = TRUE, hjust = -0.1, vjust = 3)
 
-ggsave(paste0(figures_path, "obs_pred_fig.png"), obs_pred_fig, width = 84, height = 84, units = "mm")
+ggsave(paste0(figures_path, "Figure5.png"), obs_pred_fig, width = 84, height = 84, units = "mm")
 
 #Figure S1 (Supplementary fig. 1)
 kz_southern <- light_kz %>% 
@@ -316,7 +316,7 @@ kd_comps_perc <- kz_part %>%
 
 fig_partitioning <- kd_comps+kd_comps_perc+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
 
-ggsave(paste0(figures_path, "fig_partitioning.png"), fig_partitioning, width = 174, height = 129, units = "mm")
+ggsave(paste0(figures_path, "FigureS1.png"), fig_partitioning, width = 174, height = 129, units = "mm")
 
 #Figure 7
 #Calculate bootstrapped percentile confidence intervals of z10%
@@ -354,4 +354,4 @@ depth_plot <- depth_data %>%
   scale_shape_manual(values = c(21, 19), labels = c("Max. colonization depth (m)", expression(z["10%"]~"(m)")))+
   theme(legend.position = c(0.25, 0.87), legend.title = element_blank(), legend.text.align = 0)
 
-ggsave(paste0(figures_path, "fig_depth.png"), depth_plot, width = 129, height = 84, units = "mm")
+ggsave(paste0(figures_path, "Figure7.png"), depth_plot, width = 129, height = 84, units = "mm")

@@ -2,6 +2,8 @@ source("rawdata.R")
 
 #Calculation of stats for manuscript
 
+#test
+
 #Nutrients stats used in manuscript
 filso_chem %>%
   filter(chem_site != "indløb", year(date) %in% 2013:2017) %>%

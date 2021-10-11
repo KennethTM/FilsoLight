@@ -123,12 +123,25 @@ chl_fig <- chla %>%
   xlab("Day of the year")+
   ylab(expression("Chlorophyll"~italic(a)~"("*mu*g~L^{-1}*")"))
 
+chl_boxplot <- chla %>%
+  mutate(year = year(date),
+         month = month(date),
+         doy = yday(date),
+         week = week(date)) %>%
+  filter(year %in% 2013:2017) %>% 
+  ggplot(aes(factor(month), chla_ug_l))+
+  geom_boxplot(outlier.shape = 1)+
+  scale_x_discrete(breaks = 1:12)+
+  scale_color_brewer(name = "Year", palette="Dark2")+
+  xlab("Month")+
+  ylab(expression("Chlorophyll"~italic(a)~"("*mu*g~L^{-1}*")"))
+
 wnd_speed_fig <- wnd_dmi %>% 
   select(date, wnd_mean, wnd_dir) %>% 
   mutate(year = year(date),
          month = month(date)) %>% 
   ggplot(aes(factor(month), wnd_mean))+
-  geom_boxplot()+
+  geom_boxplot(outlier.shape = 1)+
   scale_x_discrete(breaks = 1:12)+
   scale_color_brewer(name = "Year", palette="Dark2")+
   xlab("Month")+
@@ -136,17 +149,26 @@ wnd_speed_fig <- wnd_dmi %>%
 
 wnd_dir_fig <- wnd_dmi %>% 
   select(date, wnd_mean, wnd_dir) %>% 
-  mutate(year = year(date)) %>% 
-  ggplot(aes(wnd_dir, fill = factor(year)))+
-  geom_density(alpha = 0.5, col = "white")+
-  scale_fill_brewer(name = "Year", palette="Dark2")+
-  xlab("Wind direction (degrees)")+
-  ylab("Density")+
-  scale_x_continuous(breaks = seq(0, 360, 45), limits = c(0, 360))
+  mutate(year = year(date),
+         month = month(date)) %>% 
+  ggplot(aes(factor(month), wnd_dir))+
+  geom_boxplot(outlier.shape = 1)+
+  scale_x_discrete(breaks = 1:12)+
+  scale_color_brewer(name = "Year", palette="Dark2")+
+  xlab("Month")+
+  ylab("Wind direction (degrees)")+
+  scale_y_continuous(limits = c(0, 360))
 
-all_vars_fig <- chl_fig+wnd_speed_fig+wnd_dir_fig+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
+  # ggplot(aes(wnd_dir, fill = factor(year)))+
+  # geom_density(alpha = 0.5, col = "white")+
+  # scale_fill_brewer(name = "Year", palette="Dark2")+
+  # xlab("Wind direction (degrees)")+
+  # ylab("Density")+
+  # scale_x_continuous(breaks = seq(0, 360, 45), limits = c(0, 360))
 
-ggsave(paste0(figures_path, "Figure4.png"), all_vars_fig, width = 129, height = 234, units = "mm")
+all_vars_fig <- chl_fig+chl_boxplot+wnd_speed_fig+wnd_dir_fig+plot_layout(ncol=2, guides = "collect")+plot_annotation(tag_levels = "A")
+
+ggsave(paste0(figures_path, "Figure4.png"), all_vars_fig, width = 174, height = 150, units = "mm")
 
 #Figure 6
 gam_best <- readRDS(paste0(modeling_path, "gam_best.rds"))

@@ -28,13 +28,23 @@ eu <- ne_countries(continent = "Europe", scale = 50) %>%
   filter(admin %in% c("Denmark", "Sweden", "Norway")) %>% 
   st_crop(st_bbox(eu_poly))
 
+filso_contour <- st_read(paste0(getwd(), "/data/filso_bathy/samlet_Major Contours.shp")) %>% 
+  st_transform(25832) %>% 
+  st_intersection(boundary) %>% 
+  st_cast("MULTILINESTRING")
+
+filso_contour_col <- brewer.pal(9, "Blues")[3:9]
+
 lake_map <- ggplot()+
-  geom_sf(data = boundary, fill = NA, col = "gray")+
+  geom_sf(data = filso_contour, aes(col=factor(Dyb)), size = 0.5)+
+  annotation_scale()+
+  geom_sf(data = boundary, fill = NA, col = "black")+
+  scale_color_manual(values = filso_contour_col)+
   geom_sf_text(data = filter(st, str_detect(Name, "St.")), aes(label = paste0("St. ", name_new)), size = 2.5, nudge_x = -350, nudge_y = 100)+
   geom_sf_text(data = filter(st, !str_detect(Name, "St.")), aes(label = Name), size = 2.5)+
   geom_sf(data = filter(st, str_detect(Name, "St.")), col = "black")+
-  scale_color_manual(values = c("Light" = "deepskyblue", "Chemistry" = "coral", "basin" = "white"), name = "")+
   xlab(NULL)+
+  guides(colour = guide_legend(title = "Depth (m)"))+
   scale_x_continuous(breaks = c(8.21, 8.235, 8.26))+
   ylab("Latitude")+
   xlab("Longitude")
@@ -44,7 +54,7 @@ eu_map <- ggplot()+
   geom_sf(data = boundary_centroid, size = 2, col = "red")
 
 #Export figures separately and combine in Inkscape
-ggsave(paste0(figures_path, "map_1_fig.svg"), lake_map, width = 100, height = 100, units = "mm")
+ggsave(paste0(figures_path, "map_1_fig.svg"), lake_map, width = 129, height = 129, units = "mm")
 ggsave(paste0(figures_path, "map_2_fig.svg"), eu_map, width = 100, height = 100, units = "mm")
 
 #Figure 2
@@ -235,7 +245,7 @@ obs_pred_fig <- obs_pred_data %>%
 
 ggsave(paste0(figures_path, "Figure5.png"), obs_pred_fig, width = 84, height = 84, units = "mm")
 
-#Figure S1 (Supplementary fig. 1)
+#Figure S3
 kz_southern <- light_kz %>% 
   filter(station %in% c(1, 2)) %>% 
   group_by(date) %>% 
@@ -316,7 +326,7 @@ kd_comps_perc <- kz_part %>%
 
 fig_partitioning <- kd_comps+kd_comps_perc+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
 
-ggsave(paste0(figures_path, "FigureS1.png"), fig_partitioning, width = 174, height = 129, units = "mm")
+ggsave(paste0(figures_path, "FigureS3.png"), fig_partitioning, width = 174, height = 129, units = "mm")
 
 #Figure 7
 #Calculate bootstrapped percentile confidence intervals of z10%
@@ -355,3 +365,20 @@ depth_plot <- depth_data %>%
   theme(legend.position = c(0.25, 0.87), legend.title = element_blank(), legend.text.align = 0)
 
 ggsave(paste0(figures_path, "Figure7.png"), depth_plot, width = 129, height = 84, units = "mm")
+
+#Figure S2 - chla vs wtr
+wtr_mean <- readRDS(paste0(rawdata_path, "wtr_station_1.rds"))
+
+figure_s2 <- chla %>% 
+  left_join(wtr_mean) %>% 
+  na.omit() %>% 
+  mutate(Year = factor(year(date))) %>% 
+  ggplot(aes(wtr_mean, chla_ug_l, col = Year))+
+  geom_point(shape=1)+
+  ylab(expression("Chlorophyll"~italic(a)~"("*mu*g~L^{-1}*")"))+
+  xlab("Water temperature (°C)")+
+  scale_color_brewer(name = "Year", palette="Dark2")+
+  theme(legend.position = "bottom")
+
+ggsave(paste0(figures_path, "FigureS2.png"), figure_s3, width = 129, height = 129, units = "mm")
+

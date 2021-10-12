@@ -71,3 +71,12 @@ kz_part %>%
   group_by(variable) %>% 
   summarise(mean = mean(value, na.rm = TRUE))
 
+#Example model predictions
+gam_best <- readRDS(paste0(modeling_path, "gam_best.rds"))
+
+example_preds <- data.frame(wnd_mean = c(5, 5, 10, 10, 15, 15), 
+                            wnd_dir = c(median(model_df$wnd_dir), 0, median(model_df$wnd_dir), 0, median(model_df$wnd_dir), 0), 
+                            wnd_mean_lag1 = c(5, 5, 10, 10, 15, 15),
+                            year = mean(model_df$year), doy = mean(model_df$doy))
+
+cbind(example_preds, predictions = predict(gam_best, newdata=example_preds))

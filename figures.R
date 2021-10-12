@@ -31,17 +31,18 @@ eu <- ne_countries(continent = "Europe", scale = 50) %>%
 filso_contour <- st_read(paste0(getwd(), "/data/filso_bathy/samlet_Major Contours.shp")) %>% 
   st_transform(25832) %>% 
   st_intersection(boundary) %>% 
-  st_cast("MULTILINESTRING")
+  st_cast("MULTILINESTRING") %>% 
+  filter(Dyb %in% c(1.0, 2.0, 3.0))
 
-filso_contour_col <- brewer.pal(9, "Blues")[3:9]
+filso_contour_col <- brewer.pal(9, "Blues")[c(4, 6, 9)]
 
 lake_map <- ggplot()+
   geom_sf(data = filso_contour, aes(col=factor(Dyb)), size = 0.5)+
   annotation_scale()+
   geom_sf(data = boundary, fill = NA, col = "black")+
   scale_color_manual(values = filso_contour_col)+
-  geom_sf_text(data = filter(st, str_detect(Name, "St.")), aes(label = paste0("St. ", name_new)), size = 2.5, nudge_x = -350, nudge_y = 100)+
-  geom_sf_text(data = filter(st, !str_detect(Name, "St.")), aes(label = Name), size = 2.5)+
+  geom_sf_text(data = filter(st, str_detect(Name, "St.")), aes(label = paste0("St. ", name_new)), size = 4, nudge_x = -350, nudge_y = 100)+
+  geom_sf_text(data = filter(st, !str_detect(Name, "St.")), aes(label = Name), size = 4)+
   geom_sf(data = filter(st, str_detect(Name, "St.")), col = "black")+
   xlab(NULL)+
   guides(colour = guide_legend(title = "Depth (m)"))+
@@ -71,7 +72,8 @@ kz_fig <- kz_fig_data %>%
   geom_vline(xintercept = 295, linetype = 2)+
   geom_rect(inherit.aes=FALSE, aes(xmin = doy, xmax = doy+1, ymin=9, ymax=10.5, fill = wnd_mean))+
   geom_line()+
-  scale_color_viridis_d(name = "Station")+
+  #scale_color_viridis_d(name = "Station")+
+  scale_color_brewer(palette = "Dark2", name = "Station")+
   scale_fill_gradient(low = grey(0.9), high = grey(0), name = expression("Wind speed (m s"^{-1}*")"))+
   facet_grid(year~.)+
   guides(fill=guide_colorbar(title.position = "top", barwidth = 10), color = guide_legend(title.position = "top"))+

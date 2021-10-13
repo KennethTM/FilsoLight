@@ -26,29 +26,12 @@ land_light_day <- inner_join(land_par, land_lux) %>%
   summarise(lux = sum(lux), par = sum(par), n = n()) %>% 
   filter(n == 144)
 
+#Write file for supplementary figure S1
+saveRDS(land_light_day, paste0(rawdata_path, "land_light_day.rds"))
+
 land_light_model <- lm(par ~ lux - 1, data = land_light_day) 
 plot(resid(land_light_model))
 summary(land_light_model)
-
-#Figure S1
-figure_s1_main <- land_light_day %>%
-  ggplot(aes(x = lux/144, y = par/144))+
-  geom_point(shape=1)+
-  geom_smooth(method = "lm", formula = "y ~ x - 1")+
-  ylab(expression("Daily mean PAR ("*mu*mol~m^{-2}~s^{-1}*")"))+
-  xlab(expression("Daily mean lux ("*lumen~m^{-2}*")"))
-
-figure_s1_inset <- land_light_day %>%
-  ggplot(aes(x = lux/144, y = par/144))+
-  geom_point(shape=1)+
-  coord_cartesian(xlim=c(0, 500000/144), ylim=c(0, 5000/144))+
-  geom_smooth(method = "lm", formula = "y ~ x - 1")+
-  ylab(NULL)+
-  xlab(NULL)
-
-figure_s1 <- figure_s1_main+inset_element(figure_s1_inset, 0.02, 0.6, 0.4, 0.98)
-
-ggsave(paste0(figures_path, "FigureS1.png"), figure_s1, width = 129, height = 129, units = "mm")
 
 #Read underwater hobo light data
 read_hobo_csv <- function(file){

@@ -82,6 +82,7 @@ kz_fig <- kz_fig_data %>%
   theme(legend.position = "bottom")
 
 ggsave(paste0(figures_path, "Figure2.png"), kz_fig, width = 174, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure2.svg"), kz_fig, width = 174, height = 234, units = "mm")
 
 #Figure 3
 cdom_fig <- filso_chem %>% 
@@ -109,6 +110,7 @@ cdom_fig <- filso_chem %>%
   theme(legend.position = "bottom")
 
 ggsave(paste0(figures_path, "Figure3.png"), cdom_fig, width = 174, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure3.svg"), cdom_fig, width = 174, height = 234, units = "mm")
 
 #Figure 4
 chl_fig <- chla %>%
@@ -171,6 +173,7 @@ wnd_dir_fig <- wnd_dmi %>%
 all_vars_fig <- chl_fig+chl_boxplot+wnd_speed_fig+wnd_dir_fig+plot_layout(ncol=2, guides = "collect")+plot_annotation(tag_levels = "A")
 
 ggsave(paste0(figures_path, "Figure4.png"), all_vars_fig, width = 174, height = 150, units = "mm")
+ggsave(paste0(figures_path, "Figure4.svg"), all_vars_fig, width = 174, height = 150, units = "mm")
 
 #Figure 6
 gam_best <- readRDS(paste0(modeling_path, "gam_best.rds"))
@@ -247,6 +250,7 @@ all_model_fig <- gam_wnd_fig$ggObj + gam_wnd_lag1_fig$ggObj + gam_dir_fig$ggObj 
   guides(fill=guide_colorbar(title.position = "top", barwidth = 10, title = expression(K[d]~"(m"^{-1}*")")), color = guide_legend(title.position = "top"))
 
 ggsave(paste0(figures_path, "Figure6.png"), all_model_fig, width = 174, height = 234, units = "mm")
+ggsave(paste0(figures_path, "Figure6.svg"), all_model_fig, width = 174, height = 234, units = "mm")
 
 #Figure 5
 obs_pred_data <- model_df %>% 
@@ -268,6 +272,84 @@ obs_pred_fig <- obs_pred_data %>%
            parse = TRUE, hjust = -0.1, vjust = 3)
 
 ggsave(paste0(figures_path, "Figure5.png"), obs_pred_fig, width = 84, height = 84, units = "mm")
+ggsave(paste0(figures_path, "Figure5.svg"), obs_pred_fig, width = 84, height = 84, units = "mm")
+
+#Figure 7
+#Calculate bootstrapped percentile confidence intervals of z10%
+#https://gist.github.com/roualdes/1de1c9a4a26581ba18a7ae9b96019970
+boot_fn <- function(d, i) {
+  mean(d[i])
+}
+
+boot_perc <- function(b, probs=c(0.025, 0.5, 0.975),
+                       nms=c("lower_bound", "median", "upper_bound")) {
+  b$t %>%
+    quantile(probs=probs) %>%
+    as.list() %>%
+    setNames(nm=nms) %>%
+    data.frame()
+}
+
+depth_data <- kz_fig_data %>%
+  group_by(year) %>%
+  summarise(bsamples = list(boot(z_ten_perc, boot_fn, R=1000))) %>%
+  mutate(bs = lapply(bsamples, boot_perc)) %>%
+  select(-bsamples) %>%
+  unnest(bs) %>% 
+  add_column(max_depth = c(0.49, 0.78, 0.94, 1.19, 1.04))
+
+depth_plot <- depth_data %>% 
+  ggplot()+
+  geom_linerange(aes(year, median, ymin = lower_bound, ymax=upper_bound))+
+  geom_line(aes(year, median), linetype = 1)+
+  geom_point(aes(year, median, shape = "z[10%] (m)"), size = 2.5)+
+  geom_line(aes(year, max_depth), linetype = 2)+
+  geom_point(aes(year, max_depth, shape = "Max. colonization depth (m)"), size = 2.5, fill="white")+
+  ylab("Depth (m)")+
+  xlab("Year")+
+  scale_shape_manual(values = c(21, 19), labels = c("Max. colonization depth (m)", expression(z["10%"]~"(m)")))+
+  theme(legend.position = c(0.25, 0.87), legend.title = element_blank(), legend.text.align = 0)
+
+ggsave(paste0(figures_path, "Figure7.png"), depth_plot, width = 129, height = 84, units = "mm")
+ggsave(paste0(figures_path, "Figure7.svg"), depth_plot, width = 129, height = 84, units = "mm")
+
+#Figure S1
+land_light_day <- readRDS(paste0(rawdata_path, "land_light_day.rds"))
+
+figure_s1_main <- land_light_day %>%
+  ggplot(aes(x = lux/144, y = par/144))+
+  geom_point(shape=1)+
+  geom_smooth(method = "lm", formula = "y ~ x - 1")+
+  ylab(expression("Daily mean PAR ("*mu*mol~m^{-2}~s^{-1}*")"))+
+  xlab(expression("Daily mean lux ("*lumen~m^{-2}*")"))
+
+figure_s1_inset <- land_light_day %>%
+  ggplot(aes(x = lux/144, y = par/144))+
+  geom_point(shape=1)+
+  coord_cartesian(xlim=c(0, 500000/144), ylim=c(0, 5000/144))+
+  geom_smooth(method = "lm", formula = "y ~ x - 1")+
+  ylab(NULL)+
+  xlab(NULL)
+
+figure_s1 <- figure_s1_main+inset_element(figure_s1_inset, 0.02, 0.6, 0.4, 0.98)
+
+ggsave(paste0(figures_path, "FigureS1.png"), figure_s1, width = 129, height = 129, units = "mm")
+
+#Figure S2
+wtr_mean <- readRDS(paste0(rawdata_path, "wtr_station_1.rds"))
+
+figure_s2 <- chla %>% 
+  left_join(wtr_mean) %>% 
+  na.omit() %>% 
+  mutate(Year = factor(year(date))) %>% 
+  ggplot(aes(wtr_mean, chla_ug_l, col = Year))+
+  geom_point(shape=1)+
+  ylab(expression("Chlorophyll"~italic(a)~"("*mu*g~L^{-1}*")"))+
+  xlab("Water temperature (°C)")+
+  scale_color_brewer(name = "Year", palette="Dark2")+
+  theme(legend.position = "bottom")
+
+ggsave(paste0(figures_path, "FigureS2.png"), figure_s3, width = 129, height = 129, units = "mm")
 
 #Figure S3
 kz_southern <- light_kz %>% 
@@ -351,58 +433,3 @@ kd_comps_perc <- kz_part %>%
 fig_partitioning <- kd_comps+kd_comps_perc+plot_layout(ncol=1, guides = "collect")+plot_annotation(tag_levels = "A")
 
 ggsave(paste0(figures_path, "FigureS3.png"), fig_partitioning, width = 174, height = 129, units = "mm")
-
-#Figure 7
-#Calculate bootstrapped percentile confidence intervals of z10%
-#https://gist.github.com/roualdes/1de1c9a4a26581ba18a7ae9b96019970
-boot_fn <- function(d, i) {
-  mean(d[i])
-}
-
-boot_perc <- function(b, probs=c(0.025, 0.5, 0.975),
-                       nms=c("lower_bound", "median", "upper_bound")) {
-  b$t %>%
-    quantile(probs=probs) %>%
-    as.list() %>%
-    setNames(nm=nms) %>%
-    data.frame()
-}
-
-depth_data <- kz_fig_data %>%
-  group_by(year) %>%
-  summarise(bsamples = list(boot(z_ten_perc, boot_fn, R=1000))) %>%
-  mutate(bs = lapply(bsamples, boot_perc)) %>%
-  select(-bsamples) %>%
-  unnest(bs) %>% 
-  add_column(max_depth = c(0.49, 0.78, 0.94, 1.19, 1.04))
-
-depth_plot <- depth_data %>% 
-  ggplot()+
-  geom_linerange(aes(year, median, ymin = lower_bound, ymax=upper_bound))+
-  geom_line(aes(year, median), linetype = 1)+
-  geom_point(aes(year, median, shape = "z[10%] (m)"), size = 2.5)+
-  geom_line(aes(year, max_depth), linetype = 2)+
-  geom_point(aes(year, max_depth, shape = "Max. colonization depth (m)"), size = 2.5, fill="white")+
-  ylab("Depth (m)")+
-  xlab("Year")+
-  scale_shape_manual(values = c(21, 19), labels = c("Max. colonization depth (m)", expression(z["10%"]~"(m)")))+
-  theme(legend.position = c(0.25, 0.87), legend.title = element_blank(), legend.text.align = 0)
-
-ggsave(paste0(figures_path, "Figure7.png"), depth_plot, width = 129, height = 84, units = "mm")
-
-#Figure S2 - chla vs wtr
-wtr_mean <- readRDS(paste0(rawdata_path, "wtr_station_1.rds"))
-
-figure_s2 <- chla %>% 
-  left_join(wtr_mean) %>% 
-  na.omit() %>% 
-  mutate(Year = factor(year(date))) %>% 
-  ggplot(aes(wtr_mean, chla_ug_l, col = Year))+
-  geom_point(shape=1)+
-  ylab(expression("Chlorophyll"~italic(a)~"("*mu*g~L^{-1}*")"))+
-  xlab("Water temperature (°C)")+
-  scale_color_brewer(name = "Year", palette="Dark2")+
-  theme(legend.position = "bottom")
-
-ggsave(paste0(figures_path, "FigureS2.png"), figure_s3, width = 129, height = 129, units = "mm")
-
